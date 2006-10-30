@@ -1269,6 +1269,37 @@ static inline void remote_free(void* object, pageblock_t* pageblock, heap_t* my_
 	} while(!compare_and_swap64(&pageblock->together, old_value, new_value));
 }
 
+static inline void chain_remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
+{
+	queue_node_t temp_head, index;
+	unsigned int temp_id;
+	unsigned long long old_value;
+	unsigned long long new_value;
+	void* tail;
+
+	memory_add(&num_remote_frees, 1);
+
+	index.next = ((unsigned long)object - (unsigned long)pageblock->mem_pool) / pageblock->object_size + 1;
+	tail = pageblock->mem_pool + (((queue_node_t *)object)->count - 1) * pageblock->object_size;
+	do {
+		temp_id = pageblock->owning_thread;
+
+		if (temp_id == ORPHAN) {
+			adopt_pageblock(object, pageblock, my_heap);
+			break;
+		}
+		
+		temp_head = pageblock->garbage_head;
+		((queue_node_t *)tail)->next = temp_head.next;
+		index.count = temp_head.count + 1;
+
+		((unsigned int*)&old_value)[0] = temp_id;
+		((unsigned int*)&old_value)[1] = *((unsigned int*)&temp_head);
+		((unsigned int*)&new_value)[0] = temp_id;
+		((unsigned int*)&new_value)[1] = *((unsigned int*)&index);
+	} while(!compare_and_swap64(&pageblock->together, old_value, new_value));
+}
+
 /* Extracts the meta information for an object for free(). */
 static inline void object_extract(void** object, void** ptr, size_t* size, short* object_type)
 {
@@ -1336,6 +1367,11 @@ void free(void* object)
 
 	memory_add(&num_active_small, -pageblock->object_size);
 
+	/*
+	fprintf(stderr, "free: %p in %p (%d, %p)\n", object, pageblock, remote_cache_total, remote_cache.queue);
+	fflush(stderr);
+	*/
+
 	heap_t* my_heap = &local_heap[compute_size_class(pageblock->object_size)];
 
 	/* If we own the pageblock, then we can handle the object free right away. */
@@ -1360,9 +1396,10 @@ void free(void* object)
 				pageblock_t* head_pageblock = (pageblock_t*)ptr;
 
 				if (head_pageblock == pageblock) {
-					((queue_node_t *)object)->next = (unsigned long)head_object -
-									(unsigned long)pageblock->mem_pool / pageblock->object_size + 1;
+					((queue_node_t *)object)->next = ((unsigned long)head_object - (unsigned long)pageblock->mem_pool)
+									/ pageblock->object_size + 1;
 					((queue_node_t *)object)->count = ((queue_node_t *)head_object)->count;
+
 				}
 				else {
 					seq_lifo_enqueue(&remote_cache.queue, head_object);
@@ -1370,8 +1407,6 @@ void free(void* object)
 				}
 			}
 			else {
-				fprintf(stderr, "tail: %p, %d\n", object, ((unsigned long)object - (unsigned long)pageblock->mem_pool) / pageblock->object_size + 1);
-				fflush(stderr);
 				((queue_node_t *)object)->count = ((unsigned long)object - (unsigned long)pageblock->mem_pool)
 							/ pageblock->object_size + 1;
 			}

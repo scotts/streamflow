@@ -3,13 +3,13 @@
 #	- HEADERS
 #	- BIBOP
 #	- RADIX_TREE
-META_METHOD	= BIBOP
+META_METHOD	= RADIX_TREE
 
 # What architecture are we on?
 # Options:
 # 	- ppc64 (IBM PowerPC, 64-bit)
 #	- x86 (Intel x86, 32-bit)
-ASM		= x86
+ASM		= ppc64
 
 ifeq ($(ASM), ppc64)
 	BITS = 64
