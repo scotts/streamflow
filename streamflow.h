@@ -252,7 +252,7 @@ void *memalign(size_t boundary, size_t size);
 int posix_memalign(void **memptr, size_t alignment, size_t size);
 
 #ifdef MEMORY
-void timer_handler(int);
+extern void timer_handler(int);
 #endif
 
 #endif	// __STREAMFLOW_H__

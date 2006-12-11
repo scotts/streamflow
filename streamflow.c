@@ -1070,7 +1070,7 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 
 void timer_handler(int sig)
 {
-	fprintf(stderr, "totsmall %u totmedium %utotlarge %u szsmall %lluszmedium %llu szlarge %llu frees %u remote %u adopt %u\n",
+	fprintf(stderr, "totsmall %u totmedium %u totlarge %u szsmall %llu szmedium %llu szlarge %llu frees %u remote %u adopt %u\n",
 			num_total_small, num_total_medium, num_total_large, 
 			size_total_small, size_total_medium, size_total_large, 
 			num_frees, num_remote_frees, num_adoptions);
@@ -1084,14 +1084,16 @@ static inline void memory_init_check()
 #ifdef MEMORY
 	if (!init_flag) {
 		spin_lock(&init_lock);
+
 		if (!init_flag) {
 			struct sigaction act;
-			
+
 			memset(&act, 0, sizeof(act));
 			act.sa_handler = &timer_handler;
 			sigaction(SIGUSR1, &act, NULL);
 			atexit(timer_handler);
 		}
+
 		init_flag = 1;
 		spin_unlock(&init_lock);
 	}
