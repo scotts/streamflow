@@ -78,7 +78,7 @@ extern __thread unsigned int thread_id;
 #define MAX_GLOBAL_INACTIVE	0
 #define MIN_PAGEBLOCK_SIZE	(4 * PAGE_SIZE)		/* Must be a power-of-2. */
 #define MAX_PAGEBLOCK_SIZE	(4 * 16 * PAGE_SIZE)	/* Must be a power-of-2. */
-#define OBJECT_GRANULARITY	(2 * HEADER_SIZE)
+#define OBJECT_GRANULARITY	HEADER_SIZE
 #define MAX_OBJECT_SIZE		16576 /*(4 * PAGE_SIZE) */
 #define OBJECT_SIZE_CLASSES	256
 

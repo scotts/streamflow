@@ -39,7 +39,7 @@ static __inline__ int atmc_fetch_and_add(volatile unsigned int *address, int val
 	return t;
 }
 
-static __inline__ void atmc_add(volatile unsigned int* address, int value)
+static __inline__ void atmc_add32(volatile unsigned int* address, int value)
 {
 	int t;
 
@@ -47,6 +47,20 @@ static __inline__ void atmc_add(volatile unsigned int* address, int value)
 "1:	lwarx	%0,0,%3		# atomic_add\n\
 	add	%0,%2,%0\n\
 	stwcx.	%0,0,%3\n\
+	bne-	1b"
+	: "=&r" (t), "=m" (*address)
+	: "r" (value), "r" (address), "m" (*address)
+	: "cc");
+}
+
+static __inline__ void atmc_add64(volatile unsigned long long* address, unsigned long long value)
+{
+	int t;
+
+	__asm__ __volatile__(
+"1:	ldarx	%0,0,%3		# atomic_add\n\
+	add	%0,%2,%0\n\
+	stdcx.	%0,0,%3\n\
 	bne-	1b"
 	: "=&r" (t), "=m" (*address)
 	: "r" (value), "r" (address), "m" (*address)

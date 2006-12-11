@@ -28,10 +28,10 @@ CXX		= g++
 LDFLAGS		= -lpthread -lm -ldl
 CFLAGS		= -D_REENTRANT -D$(ASM) -D$(META_METHOD)
 #CFLAGS		+= -DSUPERPAGES
-#CFLAGS		+= -DMEMORY
+CFLAGS		+= -DMEMORY
 
 GCC_CFLAGS	= -D_GNU_SOURCE -Wall -m$(BITS) -fno-strict-aliasing $(FPIC)
-GCC_OPT		= -O3 -pipe -finline-functions -fomit-frame-pointer
+GCC_OPT		= -O3 -ggdb #-pipe -finline-functions -fomit-frame-pointer
 
 ICC_CFLAGS	= -wd279 -wd981 -wd1418 -wd1469 -wd383 -wd869 -wd522 -wd810 -wd1684 -wd1338 -wd1684 -D_GNU_SOURCE
 ICC_OPT		= -O3 -pipe -finline-functions -fomit-frame-pointer 
@@ -75,8 +75,8 @@ libstreamflow.so:	malloc_new.o streamflow.o override.o
 			$(CXX) $(CFLAGS) $(OPT) override.o streamflow.o malloc_new.o -o libstreamflow.so $(LDFLAGS) -lstdc++ -shared 
 
 recycle:		recycle.c 
-			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c $(LDFLAGS)
+			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c -L/mnt/home/sss/scotts/public -lstreamflow $(LDFLAGS)
 
 larson:			larson.cpp 
-			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp $(LDFLAGS)
+			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp -L/mnt/home/sss/scotts/public -lstreamflow $(LDFLAGS)
 

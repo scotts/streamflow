@@ -8,14 +8,14 @@
 
 /* Used for gathering memory stats. */
 static volatile unsigned int num_total_small;
+static volatile unsigned int num_total_medium;
 static volatile unsigned int num_total_large;
-static volatile unsigned int num_active_pageblocks;
-static volatile unsigned int num_active_small;
-static volatile unsigned int num_active_large;
 static volatile unsigned int num_frees;
 static volatile unsigned int num_remote_frees;
-static volatile double avg_small;
-static volatile double avg_large;
+static volatile unsigned int num_adoptions;
+static volatile unsigned long long size_total_small;
+static volatile unsigned long long size_total_medium;
+static volatile unsigned long long size_total_large;
 
 #ifdef MEMORY
 static int init_flag;
@@ -195,28 +195,17 @@ static const int reverse[] = {	4, 8, 12, 16, 20, 24, 28, 32, 36, 40,
 				15552, 15808, 16064, 16320, 16576 }; 
 
 /* If we're collecting memory stats, does an atomic add. If not, does nothing. */
-static inline void memory_add(volatile unsigned int* address, int value)
+static inline void memory_add32(volatile unsigned int* address, int value)
 {
 #ifdef MEMORY
-	atmc_add(address, value);
+	atmc_add32(address, value);
 #endif
 }
 
-/* Keeps a running average, atomically, of a value if we're collecting memory 
- * stats. If not, does nothing. */
-static inline void memory_average(volatile double* avg, volatile unsigned int* total, volatile unsigned int* active, double delta)
+static inline void memory_add64(volatile unsigned long long* address, unsigned long long value)
 {
 #ifdef MEMORY
-	double newval;
-	atmc_add(total, 1);
-	atmc_add(active, delta);
-	/*
-	do {
-		newval = (*avg + delta) / *total;
-		fprintf(stderr, "new %llx, old %llx, old ref %llx, delta %llx, total %lx\n", newval, *avg, *((unsigned long long *)avg), delta, total);
-		fflush(stderr);
-	} while (!compare_and_swap64((unsigned long long *)avg, *avg, newval));
-	*/
+	atmc_add64(address, value);
 #endif
 }
 
@@ -812,11 +801,17 @@ static inline void* medium_or_large_alloc(size_t size)
 		 * ever gets), we only need to register the first page. */
 		register_pages(mem, 1, ((pageblock_t*)mem)->sph, size, OBJECT_MEDIUM);
 		headerize_object(&mem, ((pageblock_t*)mem)->sph, size, OBJECT_MEDIUM);
+
+		memory_add32(&num_total_medium, 1);
+		memory_add64(&size_total_medium, size);
 	}
 	else {
 		mem = page_alloc(size);
 		register_pages(mem, 1, NULL, size, OBJECT_LARGE);
 		headerize_object(&mem, NULL, size, OBJECT_LARGE);
+
+		memory_add32(&num_total_large, 1);
+		memory_add64(&size_total_large, size);
 	}
 
 	return mem;
@@ -828,19 +823,18 @@ static inline void insert_global_free_pageblocks(pageblock_t* pageblock)
 	int size_index = quick_log2((pageblock->mem_pool_size + (unsigned long)pageblock->mem_pool - (unsigned long)pageblock) / PAGE_SIZE) - quick_log2(MIN_PAGEBLOCK_SIZE / PAGE_SIZE);
 
 	if (global_free_pageblocks[size_index].count >= MAX_GLOBAL_INACTIVE) {
-		memory_add(&num_active_pageblocks, -(pageblock->mem_pool_size + ((unsigned long)pageblock->mem_pool - (unsigned long)pageblock)));
 		//page_free(pageblock, pageblock->mem_pool_size + CACHE_LINE_SIZE);
 		superunmap(pageblock, pageblock->mem_pool_size + CACHE_LINE_SIZE);
 	}
 	else {
-		atmc_add(&global_free_pageblocks[size_index].count, 1);
+		atmc_add32(&global_free_pageblocks[size_index].count, 1);
 		lf_lifo_enqueue(&global_free_pageblocks[size_index].queue, pageblock);
 	}
 }
 
 static inline void insert_global_partial_pageblocks(pageblock_t* pageblock, int class_index)
 {
-	atmc_add(&global_partial_pageblocks[class_index].count, 1);
+	atmc_add32(&global_partial_pageblocks[class_index].count, 1);
 	lf_lifo_enqueue(&global_partial_pageblocks[class_index].queue, pageblock);
 }
 
@@ -849,14 +843,14 @@ static inline pageblock_t* remove_global_pageblocks(int class_index, int pageblo
 {
 	pageblock_t* pageblock = (pageblock_t*)lf_lifo_dequeue(&global_partial_pageblocks[class_index].queue);
 	if (pageblock) {
-		atmc_add(&global_partial_pageblocks[class_index].count, -1);
+		atmc_add32(&global_partial_pageblocks[class_index].count, -1);
 	}
 	else {
 		int size_index = quick_log2(pageblock_size / PAGE_SIZE) - quick_log2(MIN_PAGEBLOCK_SIZE / PAGE_SIZE);
 
 		pageblock = (pageblock_t*)lf_lifo_dequeue(&global_free_pageblocks[size_index].queue);
 		if (pageblock) {
-			atmc_add(&global_free_pageblocks[size_index].count, -1);
+			atmc_add32(&global_free_pageblocks[size_index].count, -1);
 		}
 	}
 
@@ -967,7 +961,7 @@ void streamflow_thread_finalize(void)
 					insert_global_free_pageblocks(pageblock);
 				}
 				else {
-					if (pageblock->num_free_objects > 0 || pageblock->garbage_head.next != 0) {
+					if (pageblock->num_free_objects > 0 || pageblock->garbage_head.next == 0) {
 						insert_global_partial_pageblocks(pageblock, i);
 					}
 					else {
@@ -1048,7 +1042,6 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 		//pageblock = (pageblock_t*)page_alloc(pageblock_size);
 		pageblock = (pageblock_t*)supermap(pageblock_size);
 		register_pages(pageblock, pageblock_size / PAGE_SIZE, pageblock, 0, OBJECT_SMALL);
-		memory_add(&num_active_pageblocks, pageblock_size);
 
 		lf_lifo_queue_init_nABA32((unsigned int *)&(pageblock->garbage_head));
 		pageblock->freed = 0;
@@ -1077,9 +1070,10 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 
 void timer_handler(int sig)
 {
-	fprintf(stderr, "totsmall %u totlarge %u actpageblocks %u actsmall %u actlarge %u avgsmall %f avglarge %f frees %u remote %u\n",
-			num_total_small, num_total_large, num_active_pageblocks, num_active_small, num_active_large,
-			avg_small, avg_large, num_frees, num_remote_frees);
+	fprintf(stderr, "totsmall %u totmedium %utotlarge %u szsmall %lluszmedium %llu szlarge %llu frees %u remote %u adopt %u\n",
+			num_total_small, num_total_medium, num_total_large, 
+			size_total_small, size_total_medium, size_total_large, 
+			num_frees, num_remote_frees, num_adoptions);
 	fflush(stderr);
 }
 
@@ -1145,13 +1139,11 @@ void* malloc(size_t requested_size)
 	/* We forward "large" objects directly to the OS. We define
 	 * "large" as anything larger than half a page. */
 	if (requested_size > MAX_OBJECT_SIZE) {
-		memory_average(&avg_large, &num_total_large, &num_active_large, 
-				ceil((double)(requested_size) / PAGE_SIZE) * PAGE_SIZE);
-
 		return medium_or_large_alloc(requested_size);
 	}
 
-	memory_average(&avg_small, &num_total_small, &num_active_small, requested_size);
+	memory_add32(&num_total_small, 1);
+	memory_add64(&size_total_small, requested_size);
 
 	index = compute_size_class(requested_size);
 
@@ -1221,7 +1213,7 @@ static inline void local_free(void* object, pageblock_t* pageblock, heap_t* my_h
 		}
 	}
 	/* Otherwise, we want to move it to the front of the active list. */
-	else if (pageblock != (pageblock_t*)my_heap->active_pageblocks.head && pageblock->num_free_objects == 1) {
+	else if (pageblock != (pageblock_t*)my_heap->active_pageblocks.head && pageblock->num_free_objects > 1) {
 		double_list_remove(pageblock, &my_heap->active_pageblocks);
 		double_list_insert_front(pageblock, &my_heap->active_pageblocks);
 	}
@@ -1234,6 +1226,8 @@ static inline void adopt_pageblock(void* object, pageblock_t* pageblock, heap_t*
 	if (compare_and_swap32(&pageblock->owning_thread, ORPHAN, thread_id)) {
 		double_list_insert_front(pageblock, &my_heap->active_pageblocks);
 		local_free(object, pageblock, my_heap);
+
+		memory_add32(&num_adoptions, 1);
 	}
 	else {
 		remote_free(object, pageblock, my_heap);
@@ -1247,7 +1241,7 @@ static inline void remote_free(void* object, pageblock_t* pageblock, heap_t* my_
 	unsigned long long old_value;
 	unsigned long long new_value;
 
-	memory_add(&num_remote_frees, 1);
+	memory_add32(&num_remote_frees, 1);
 
 	index.next = ((unsigned long)object - (unsigned long)pageblock->mem_pool) / pageblock->object_size + 1;
 	do {
@@ -1277,7 +1271,7 @@ static inline void chain_remote_free(void* object, pageblock_t* pageblock, heap_
 	unsigned long long new_value;
 	void* tail;
 
-	memory_add(&num_remote_frees, 1);
+	memory_add32(&num_remote_frees, 1);
 
 	index.next = ((unsigned long)object - (unsigned long)pageblock->mem_pool) / pageblock->object_size + 1;
 	tail = pageblock->mem_pool + (((queue_node_t *)object)->count - 1) * pageblock->object_size;
@@ -1344,34 +1338,22 @@ void free(void* object)
 		return;
 	}
 
-	memory_add(&num_frees, 1);
+	memory_add32(&num_frees, 1);
 
 	object_extract(&object, &ptr, &size, &object_type);
 
 	/* Large, medium or small? We handle each differently. */
 	if (object_type == OBJECT_LARGE) {
 		munmap(object, size);
-
-		memory_add(&num_active_large, -size);
 		return;
 	}
 	else if (object_type == OBJECT_MEDIUM) {
 		((pageblock_t*)object)->sph = (superpage_t*)ptr;
 		superunmap(object, size);
-
-		memory_add(&num_active_large, -size);
 		return;
 	}
 
 	pageblock = (pageblock_t*)ptr;
-
-	memory_add(&num_active_small, -pageblock->object_size);
-
-	/*
-	fprintf(stderr, "free: %p in %p (%d, %p)\n", object, pageblock, remote_cache_total, remote_cache.queue);
-	fflush(stderr);
-	*/
-
 	heap_t* my_heap = &local_heap[compute_size_class(pageblock->object_size)];
 
 	/* If we own the pageblock, then we can handle the object free right away. */
@@ -1435,9 +1417,9 @@ void free(void* object)
 	}
 }
 
-void *calloc(size_t nmemb, size_t size)
+void* calloc(size_t nmemb, size_t size)
 {
-	void *ptr;
+	void* ptr;
 	
 	ptr = malloc(nmemb * size);
 	if (!ptr) {
@@ -1447,13 +1429,13 @@ void *calloc(size_t nmemb, size_t size)
 	return memset(ptr, 0, nmemb * size);
 }
 
-void *valloc(size_t size)
+void* valloc(size_t size)
 {
 	fprintf(stderr, "valloc() called. Not implemented! Exiting.\n");
 	exit(1);
 }
 
-void *memalign(size_t boundary, size_t size)
+void* memalign(size_t boundary, size_t size)
 {
 	void *p;
 
