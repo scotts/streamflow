@@ -961,7 +961,7 @@ void streamflow_thread_finalize(void)
 					insert_global_free_pageblocks(pageblock);
 				}
 				else {
-					if (pageblock->num_free_objects > 0 || pageblock->garbage_head.next == 0) {
+					if (pageblock->num_free_objects > 0 || pageblock->garbage_head.next != 0) {
 						insert_global_partial_pageblocks(pageblock, i);
 					}
 					else {
