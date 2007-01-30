@@ -9,17 +9,15 @@ META_METHOD	= RADIX_TREE
 # Options:
 # 	- ppc64 (IBM PowerPC, 64-bit)
 #	- x86 (Intel x86, 32-bit)
-ASM		= ppc64
+#	- ia64 (Intel Itanium, 64-bit)	
+ASM		= ia64
 
 ifeq ($(ASM), ppc64)
-	BITS = 64
+	BITS = -m64
 	FPIC = -fPIC
 endif
 ifeq ($(ASM), x86)
-	BITS = 32
-endif
-ifndef BITS
-	$(error Need to define ASM.)
+	BITS = -m32
 endif
 
 CC		= gcc
@@ -28,9 +26,9 @@ CXX		= g++
 LDFLAGS		= -lpthread -lm -ldl
 CFLAGS		= -D_REENTRANT -D$(ASM) -D$(META_METHOD)
 #CFLAGS		+= -DSUPERPAGES
-CFLAGS		+= -DMEMORY
+#CFLAGS		+= -DMEMORY
 
-GCC_CFLAGS	= -D_GNU_SOURCE -Wall -m$(BITS) -fno-strict-aliasing $(FPIC)
+GCC_CFLAGS	= -D_GNU_SOURCE -Wall $(BITS) -fno-strict-aliasing $(FPIC)
 GCC_OPT		= -O3 -ggdb #-pipe -finline-functions -fomit-frame-pointer
 
 ICC_CFLAGS	= -wd279 -wd981 -wd1418 -wd1469 -wd383 -wd869 -wd522 -wd810 -wd1684 -wd1338 -wd1684 -D_GNU_SOURCE
@@ -75,8 +73,8 @@ libstreamflow.so:	malloc_new.o streamflow.o override.o
 			$(CXX) $(CFLAGS) $(OPT) override.o streamflow.o malloc_new.o -o libstreamflow.so $(LDFLAGS) -lstdc++ -shared 
 
 recycle:		recycle.c 
-			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c -L/mnt/home/sss/scotts/public -lstreamflow $(LDFLAGS)
+			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c $(LDFLAGS)
 
 larson:			larson.cpp 
-			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp -L/mnt/home/sss/scotts/public -lstreamflow $(LDFLAGS)
+			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp -L$(HOME)/lib -lstreamflow $(LDFLAGS)
 

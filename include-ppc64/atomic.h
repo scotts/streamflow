@@ -5,7 +5,7 @@
 #define EIEIO_ON_SMP	"eieio\n"
 #define ISYNC_ON_SMP	"\n\tisync"
 
-static __inline__ unsigned long fetch_and_store(volatile unsigned int *address, unsigned int value)
+static inline unsigned long fetch_and_store(volatile unsigned int *address, unsigned int value)
 {
 	volatile unsigned long dummy = 0;
 
@@ -22,7 +22,7 @@ static __inline__ unsigned long fetch_and_store(volatile unsigned int *address, 
 	return dummy;
 }
 
-static __inline__ int atmc_fetch_and_add(volatile unsigned int *address, int value)
+static inline int atmc_fetch_and_add(volatile unsigned int *address, int value)
 {
 	int t;
 
@@ -39,7 +39,7 @@ static __inline__ int atmc_fetch_and_add(volatile unsigned int *address, int val
 	return t;
 }
 
-static __inline__ void atmc_add32(volatile unsigned int* address, int value)
+static inline void atmc_add32(volatile unsigned int* address, int value)
 {
 	int t;
 
@@ -53,7 +53,7 @@ static __inline__ void atmc_add32(volatile unsigned int* address, int value)
 	: "cc");
 }
 
-static __inline__ void atmc_add64(volatile unsigned long long* address, unsigned long long value)
+static inline void atmc_add64(volatile unsigned long long* address, unsigned long long value)
 {
 	int t;
 
@@ -67,7 +67,7 @@ static __inline__ void atmc_add64(volatile unsigned long long* address, unsigned
 	: "cc");
 }
 
-static __inline__ unsigned int compare_and_swap32(volatile unsigned int *address, unsigned int old_value, unsigned int new_value)
+static inline unsigned int compare_and_swap32(volatile unsigned int *address, unsigned int old_value, unsigned int new_value)
 {
 	unsigned int prev;
 
@@ -88,7 +88,7 @@ static __inline__ unsigned int compare_and_swap32(volatile unsigned int *address
 	return prev == old_value;
 }
 
-static __inline__ unsigned int compare_and_swap64(volatile unsigned long *address, 
+static inline unsigned int compare_and_swap64(volatile unsigned long *address, 
 						unsigned long old_value, unsigned long new_value)
 { 
 	unsigned long prev = 0;

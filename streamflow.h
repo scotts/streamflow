@@ -49,9 +49,17 @@ extern __thread unsigned int thread_id;
 #define BUDDY_BITMAP_SIZE	560
 #define BPL			64
 
+#elif ia64
+
+#define CACHE_LINE_SIZE		128
+#define SUPERPAGE_SIZE		(16 * 1024 * 1024)
+#define BUDDY_ORDER_MAX		13
+#define BUDDY_BITMAP_SIZE	560
+#define BPL			64
+
 #else
 
-#error "Must define an architecture (x86, ppc64)."
+#error "Must define an architecture (x86, ppc64, ia64)."
 
 #endif
 

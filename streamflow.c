@@ -1365,6 +1365,9 @@ void free(void* object)
 
 	/* No one owns the pageblock. */
 	else if (pageblock->owning_thread == ORPHAN) {
+		fprintf(stderr, "adopt %p\n", object);
+		fflush(stderr);
+
 		adopt_pageblock(object, pageblock, my_heap);
 	}
 		
@@ -1415,6 +1418,8 @@ void free(void* object)
 		}
 		*/
 
+		fprintf(stderr, "remote %p\n", object);
+		fflush(stderr);
 		remote_free(object, pageblock, my_heap);
 	}
 }
