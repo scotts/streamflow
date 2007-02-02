@@ -34,28 +34,31 @@ extern __thread unsigned int thread_id;
 /* Architecture-dependent parameters. */
 #ifdef x86
 
+#define PAGE_SIZE		4096
+#define PAGE_BITS		12
 #define CACHE_LINE_SIZE		128
 #define SUPERPAGE_SIZE		(4 * 1024 * 1024)
 #define BUDDY_ORDER_MAX		11
 #define BUDDY_BITMAP_SIZE	148
 #define PAGES_IN_ADDR_SPACE	1048676	/* (4 gig address space) / (page size) = # of pages in system */
-#define BPL			32
 
 #elif ppc64
 
+#define PAGE_SIZE		4096
+#define PAGE_BITS		12
 #define CACHE_LINE_SIZE		128
 #define SUPERPAGE_SIZE		(16 * 1024 * 1024)
 #define BUDDY_ORDER_MAX		13
 #define BUDDY_BITMAP_SIZE	560
-#define BPL			64
 
 #elif ia64
 
+#define PAGE_SIZE		16384
+#define PAGE_BITS		14
 #define CACHE_LINE_SIZE		128
-#define SUPERPAGE_SIZE		(16 * 1024 * 1024)
-#define BUDDY_ORDER_MAX		13
-#define BUDDY_BITMAP_SIZE	560
-#define BPL			64
+#define SUPERPAGE_SIZE		(256 * 1024 * 1024)
+#define BUDDY_ORDER_MAX		15
+#define BUDDY_BITMAP_SIZE	2004
 
 #else
 
@@ -68,14 +71,11 @@ extern __thread unsigned int thread_id;
 #endif
 
 /* System parameters */
-#define PAGE_SIZE		4096
 #define PAGES_PER_SUPERPAGE	(SUPERPAGE_SIZE / PAGE_SIZE)
-#define SUPERPAGE_LOCATION	"/mnt/huge/superpage_file_XXXXXX"
 
 #define SUPERPAGE_DIRECTORY	"/mnt/huge/"
 #define SUPERPAGE_TEMP		"/tmp/supermap/"
 
-#define PAGE_BITS		12
 #define PAGE_PTR_BITS		((sizeof(void*) * 8) - PAGE_BITS)
 #define HEADER_SIZE		sizeof(void*)
 #define SUPERPAGE_BITS		10
@@ -89,9 +89,9 @@ extern __thread unsigned int thread_id;
 #define OBJECT_GRANULARITY	HEADER_SIZE
 #define MAX_OBJECT_SIZE		16576 /*(4 * PAGE_SIZE) */
 #define OBJECT_SIZE_CLASSES	256
+#define OBJECTS_PER_PAGEBLOCK	1024
 
 #define PAGEBLOCK_SIZE_CLASSES	5	/* log(MAX_PAGEBLOCK_SIZE/PAGE_SIZE) - log(MIN_PAGEBLOCK_SIZE/PAGE_SIZE) + 1 */
-#define OBJECTS_PER_PAGEBLOCK	1024
 #define ORPHAN			UINT_MAX
 
 /* The radix tree is RADIX_DEPTH levels deep. Hence, we need to split 

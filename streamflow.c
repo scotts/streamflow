@@ -228,6 +228,8 @@ static inline unsigned int quick_log2(unsigned int x)
 		case 1024:	return 10;
 		case 2048:	return 11;
 		case 4096:	return 12;
+		case 8192:	return 12;
+		case 16384:	return 13;
 	}
 
 	fprintf(stderr, "quick_log2() unhandled number: %u\n", x);
@@ -711,7 +713,6 @@ static inline void* supermap(size_t size)
 
 	/* Allocate pages from the superpage. */
 	pages = buddy_alloc(super, size);
-
 	/* UGLY: Write the superpage header pointer into the pageblock header. We 
 	 * shouldn't "know" about pageblock at this point, but this is the easiest 
 	 * way for superunmap() to know where the superpage header is for the 
@@ -1335,7 +1336,7 @@ void free(void* object)
 	pageblock_t *pageblock = NULL;
 	void* ptr;
 	short object_type;
-	
+
 	if (!object) {
 		return;
 	}
@@ -1365,9 +1366,6 @@ void free(void* object)
 
 	/* No one owns the pageblock. */
 	else if (pageblock->owning_thread == ORPHAN) {
-		fprintf(stderr, "adopt %p\n", object);
-		fflush(stderr);
-
 		adopt_pageblock(object, pageblock, my_heap);
 	}
 		
@@ -1418,8 +1416,6 @@ void free(void* object)
 		}
 		*/
 
-		fprintf(stderr, "remote %p\n", object);
-		fflush(stderr);
 		remote_free(object, pageblock, my_heap);
 	}
 }
