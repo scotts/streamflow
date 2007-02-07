@@ -58,7 +58,7 @@ extern __thread unsigned int thread_id;
 #define CACHE_LINE_SIZE		128
 #define SUPERPAGE_SIZE		(256 * 1024 * 1024)
 #define BUDDY_ORDER_MAX		15
-#define BUDDY_BITMAP_SIZE	2004
+#define BUDDY_BITMAP_SIZE	2068
 
 #else
 

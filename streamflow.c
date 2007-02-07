@@ -268,6 +268,10 @@ static inline int reverse_size_class(size_t size_class)
 static inline radix_interior_t* radix_interior_alloc()
 {
 	void* node = mmap(NULL, sizeof(radix_interior_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	/*
+	fprintf(stderr, "radix_interior(): %p\n", node);
+	fflush(stderr);
+	*/
 	if (node == MAP_FAILED) {
 		fprintf(stderr, "radix_interior_alloc() mmap of size %zd failed\n", sizeof(radix_interior_t));
 		fflush(stderr);
@@ -280,6 +284,10 @@ static inline radix_interior_t* radix_interior_alloc()
 static inline radix_leaf_t* radix_leaf_alloc()
 {
 	void* node = mmap(NULL, sizeof(radix_leaf_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	/*
+	fprintf(stderr, "radix_leaf(): %p\n", node);
+	fflush(stderr);
+	*/
 	if (node == MAP_FAILED) {
 		fprintf(stderr, "radix_leaf_alloc() mmap of size %zd failed\n", sizeof(radix_leaf_t));
 		fflush(stderr);
@@ -529,6 +537,10 @@ static inline void* quickie_alloc(quickieblock_t* quickie, size_t object_size)
 	 * anything), and when there is no more space in the last pageblock we allocated. */
 	if (quickie->unallocated == NULL || quickie->num_free_objects == 0) {
 		quickie->unallocated = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+		/*
+		fprintf(stderr, "quickie_alloc(): %p\n", quickie->unallocated);
+		fflush(stderr);
+		*/
 		if (quickie->unallocated == MAP_FAILED) {
 			fprintf(stderr, "quickie_alloc() mmap failed\n");
 			fflush(stderr);
@@ -666,6 +678,10 @@ static inline void get_free_superpage(superpage_t** super, size_t size)
 								superpage_fd, (*super)->file_offset);
 #else
 		(*super)->page_pool = mmap(NULL, SUPERPAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+		/*
+		fprintf(stderr, "get_free_superpage(): %p\n", (*super)->page_pool);
+		fflush(stderr);
+		*/
 #endif
 
 		if ((*super)->page_pool == MAP_FAILED) {
@@ -770,6 +786,10 @@ static inline void* page_alloc(size_t size)
 	void* addr;
 
 	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	/*
+	fprintf(stderr, "page_alloc(): %p\n", addr);
+	fflush(stderr);
+	*/
 	if (addr == MAP_FAILED) {
 		fprintf(stderr, "page_alloc() mmap of size %zd failed\n", size);
 		fflush(stderr);

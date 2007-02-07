@@ -76,6 +76,5 @@ recycle:		recycle.c
 			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c $(LDFLAGS)
 
 larson:			larson.cpp 
-			#$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp $(LDFLAGS)
-			$(CXX) $(CFLAGS) $(OPT) -o larson -L$(HOME)/lib -lstreamflow larson.cpp $(LDFLAGS)
+			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp $(LDFLAGS)
 

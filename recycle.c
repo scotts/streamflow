@@ -10,7 +10,8 @@
 
 size_t min_size;
 size_t max_size;
-int iterations = (int)1e8;
+//int iterations = (int)1e8;
+int iterations = (int)1e2;
 int rate;
 
 double random_number()
