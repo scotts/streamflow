@@ -3,14 +3,14 @@
 #	- HEADERS
 #	- BIBOP
 #	- RADIX_TREE
-META_METHOD	= RADIX_TREE
+META_METHOD	= BIBOP
 
 # What architecture are we on?
 # Options:
 # 	- ppc64 (IBM PowerPC, 64-bit)
 #	- x86 (Intel x86, 32-bit)
 #	- ia64 (Intel Itanium, 64-bit)	
-ASM		= ia64
+ASM		= x86
 
 ifeq ($(ASM), ppc64)
 	BITS = -m64
@@ -25,7 +25,6 @@ CXX		= g++
 
 LDFLAGS		= -lpthread -lm -ldl
 CFLAGS		= -D_REENTRANT -D$(ASM) -D$(META_METHOD)
-#CFLAGS		+= -DSUPERPAGES
 #CFLAGS		+= -DMEMORY
 
 GCC_CFLAGS	= -D_GNU_SOURCE -Wall $(BITS) -fno-strict-aliasing $(FPIC)
