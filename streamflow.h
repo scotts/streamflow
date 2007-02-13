@@ -35,6 +35,10 @@
 #include <errno.h>
 #include <string.h>
 
+#ifdef NUMA
+#include <numa.h>
+#endif
+
 #include <stddef.h>
 #include <dirent.h>
 
@@ -44,6 +48,12 @@
 
 extern unsigned int global_id_counter;
 extern __thread unsigned int thread_id;
+
+#ifdef NUMA
+extern __thread int node_id;
+extern int max_node;
+extern int* cpu_to_node;
+#endif
 
 /* Architecture-dependent parameters. */
 #ifdef x86
@@ -89,6 +99,7 @@ extern __thread unsigned int thread_id;
 
 #define SUPERPAGE_DIRECTORY	"/mnt/huge/"
 #define SUPERPAGE_TEMP		"/tmp/supermap/"
+#define NODE_MAP_PATH		"/sys/devices/system/node/"
 
 #define PAGE_PTR_BITS		((sizeof(void*) * 8) - PAGE_BITS)
 #define HEADER_SIZE		sizeof(void*)
@@ -264,6 +275,7 @@ typedef struct quickieblock		quickieblock_t;
 typedef struct buddy_order		buddy_order_t;
 
 /* public streamflow operations */
+void numa_start(void);
 void streamflow_thread_finalize(void);
 void* malloc(size_t requested_size);
 void free(void* object);

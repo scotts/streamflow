@@ -45,6 +45,16 @@ unsigned int global_id_counter = 0;
 /* Thread ID that is our index in the global object table. */
 __thread unsigned int thread_id = 0;
 
+#ifdef NUMA
+/* NUMA node ID. */
+__thread int node_id;
+
+int max_node;
+
+/* Maps a cpu to the node its on. */
+int* cpu_to_node;
+#endif
+
 static radix_interior_t* radix_root;
 
 /* Dangerous. We need a more robust way of letting multiple processes

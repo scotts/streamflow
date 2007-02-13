@@ -36,6 +36,8 @@ typedef struct {
 	void*		app_arg;
 } wrapper_args_t;
 
+void bindme(int context);
+
 static void* wrapper(void* wargs)
 {
 	void* result;
@@ -43,6 +45,13 @@ static void* wrapper(void* wargs)
 	void* arg = ((wrapper_args_t*)wargs)->app_arg;
 
 	thread_id = atmc_fetch_and_add(&global_id_counter, 1);
+
+#ifdef NUMA
+	node_id = numa_preferred();
+
+	fprintf(stderr, "%d:%d\n", thread_id, node_id);
+	fflush(stderr);
+#endif
 
 	munmap(wargs, sizeof(wrapper_args_t));
 	result = start_routine(arg);
@@ -115,4 +124,77 @@ void pthread_exit(void* arg)
 	 * should exit for us. */
 	exit(0);
 }
+
+#ifdef NUMA
+/* Bind this thread to a particular context/core/processor. */
+void bindme(int context)
+{
+
+}
+
+/* Determine the cpu-to-node mapping, bind the first thread. */
+void numa_start()
+{
+	DIR* root_dir;
+	struct dirent* root_entry;
+	char path[NAME_MAX];
+	size_t root_path_length;
+
+	if (numa_available() < 0) {
+		fprintf(stderr, "No NUMA support. Exiting.\n");
+		exit(1);
+	}
+
+	/* From the man page: "numa_max_node() returns the highest node number 
+	 * available on the current system." It does NOT return the number of nodes. 
+	 * On our system, it starts counting at 0, so the highest node number is one 
+	 * less than the number of nodes. */
+	max_node = numa_max_node() + 1;
+
+	/* I'm not convinced a mmap is the best way to do this. Statically 
+	 * might be better, but we would also need a static max size. */
+	cpu_to_node = (int*)mmap(NULL, sizeof(int) * max_node, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+	strcpy(path, NODE_MAP_PATH);
+	root_path_length = strlen(path);
+	root_dir = opendir(path);
+	if (!root_dir) {
+		perror("numa_start");
+		exit(1);
+	}
+
+	while ((root_entry = readdir(root_dir)) != NULL) {
+		DIR* node_dir;
+		struct dirent* node_entry;
+		unsigned long node;
+		char node_path[NAME_MAX];
+
+		if (strncmp(root_entry->d_name, "node", 4)) {
+			continue;
+		}
+		
+		node = strtoul(root_entry->d_name + 4, NULL, 0);
+		strcpy(path + root_path_length, root_entry->d_name);
+		node_dir = opendir(path);
+		if (!root_dir) {
+			perror("numa_start");
+			exit(1);
+		}
+
+		while ((node_entry = readdir(node_dir)) != NULL) {
+			unsigned long cpu;
+
+			if (strncmp(node_entry->d_name, "cpu", 3) || isalpha(node_entry->d_name[3])) {
+				continue;
+			}
+
+			cpu = strtoul(node_entry->d_name + 3, NULL, 0);
+			cpu_to_node[cpu] = node;
+		}
+
+	}
+
+	bindme(0);
+}
+#endif
 

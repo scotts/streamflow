@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <numa.h>
 
 size_t min_size;
 size_t max_size;
@@ -73,10 +74,13 @@ void* simulate_work(void* arg)
 	return NULL;
 }
 
+void numa_start(void);
+
 int main(int argc, char* argv[])
 {
 	pthread_t* threads;
 
+	numa_start();
 
 	int num_threads = atoi(argv[1]);
 	min_size = atoi(argv[2]);

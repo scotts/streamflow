@@ -3,14 +3,14 @@
 #	- HEADERS
 #	- BIBOP
 #	- RADIX_TREE
-META_METHOD	= BIBOP
+META_METHOD	= RADIX_TREE
 
 # What architecture are we on?
 # Options:
 # 	- ppc64 (IBM PowerPC, 64-bit)
 #	- x86 (Intel x86, 32-bit)
 #	- ia64 (Intel Itanium, 64-bit)	
-ASM		= x86
+ASM		= ia64
 
 ifeq ($(ASM), ppc64)
 	BITS = -m64
@@ -23,12 +23,13 @@ endif
 CC		= gcc
 CXX		= g++
 
-LDFLAGS		= -lpthread -lm -ldl
+LDFLAGS		= -lpthread -lm -ldl -lnuma #-L$(HOME)/lib -lmynuma
 CFLAGS		= -D_REENTRANT -D$(ASM) -D$(META_METHOD)
+CFLAGS		+= -DNUMA
 #CFLAGS		+= -DMEMORY
 
 GCC_CFLAGS	= -D_GNU_SOURCE -Wall $(BITS) -fno-strict-aliasing $(FPIC)
-GCC_OPT		= -O3 -ggdb #-pipe -finline-functions -fomit-frame-pointer
+GCC_OPT		= -O0 -ggdb #-pipe -finline-functions -fomit-frame-pointer
 
 ICC_CFLAGS	= -wd279 -wd981 -wd1418 -wd1469 -wd383 -wd869 -wd522 -wd810 -wd1684 -wd1338 -wd1684 -D_GNU_SOURCE
 ICC_OPT		= -O3 -pipe -finline-functions -fomit-frame-pointer 
@@ -72,7 +73,7 @@ libstreamflow.so:	malloc_new.o streamflow.o override.o
 			$(CXX) $(CFLAGS) $(OPT) override.o streamflow.o malloc_new.o -o libstreamflow.so $(LDFLAGS) -lstdc++ -shared 
 
 recycle:		recycle.c 
-			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c $(LDFLAGS)
+			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c -L$(HOME)/lib -lstreamflow $(LDFLAGS)
 
 larson:			larson.cpp 
 			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp $(LDFLAGS)
