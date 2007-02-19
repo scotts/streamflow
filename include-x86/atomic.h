@@ -3,20 +3,6 @@
 
 #define __fool_gcc(x) (*(struct {unsigned int a[100];} *)x)
 
-inline unsigned long fetch_and_store(volatile unsigned long *address,
-				     unsigned long value);
-inline void atmc_add(volatile long *address, long value);
-inline unsigned long atmc_fetch_and_add(volatile unsigned long *address,
-					unsigned long value);
-inline unsigned long compare_and_swap(volatile unsigned long *address,
-				      unsigned long old_value,
-				      unsigned long new_value);
-
-inline unsigned long compare_and_swap8b(volatile unsigned long long *address,
-					unsigned long old_value_low,
-					unsigned long old_value_high,
-					unsigned long new_value_low,
-					unsigned long new_value_high);
 /***************************************************************************/
 
 #define fetch_and_store(address, value) \
@@ -30,7 +16,7 @@ inline unsigned long compare_and_swap8b(volatile unsigned long long *address,
  ret_val; \
 })
 
-#define atmc_add(address, value) \
+#define atmc_add32(address, value) \
 ({ \
   register volatile long val = (value); \
 \
@@ -97,6 +83,16 @@ inline unsigned long compare_and_swap8b(volatile unsigned long long *address,
 })
 
 #define compare_and_swap_ptr(address, old_value, new_value) compare_and_swap32(address, old_value, new_value)
+
+static inline void atmc_add64(volatile unsigned long long* address, unsigned long long value)
+{
+	unsigned long long oldval;
+	unsigned long long newval;
+	do {
+		oldval = *address;
+		newval = oldval + value;
+	} while (!compare_and_swap64(address, oldval, newval));
+}
 
 /*
 #define __compare_and_swap64(address, old_value_low, old_value_high, \
