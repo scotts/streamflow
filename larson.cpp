@@ -617,6 +617,7 @@ static void * exercise_heap( void *pinput)
   /* allocate NumBlocks chunks of random size */
   for( cblks=0; cblks<pdea->NumBlocks; cblks++){
     victim = lran2(&pdea->rgen)%pdea->asize ;
+    assert(victim >= 0 && victim < pdea->asize);
 #ifdef CPP
     delete pdea->array[victim] ;
 #else

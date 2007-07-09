@@ -20,6 +20,24 @@
 
 #include "streamflow.h"
 
+#ifdef PROFILE
+unsigned long long malloc_cycles;
+unsigned long long malloc_compute_cycles;
+unsigned long long garbage_cycles;
+unsigned long long get_pgblk_cycles;
+unsigned long long free_cycles;
+unsigned long long free_compute_cycles;
+unsigned long long extract_cycles;
+unsigned long long local_free_cycles;
+unsigned long long adopt_pgblk_cycles;
+unsigned long long remote_free_cycles;
+unsigned long long supermap_cycles;
+unsigned long long superunmap_cycles;
+
+unsigned long long malloc_calls;
+unsigned long long free_calls;
+#endif
+
 /* Used for gathering memory stats. */
 static volatile unsigned int num_total_small;
 static volatile unsigned int num_total_medium;
@@ -46,33 +64,23 @@ unsigned int global_id_counter = 0;
 __thread unsigned int thread_id = 0;
 
 #ifdef NUMA
-/* NUMA node ID. */
-__thread int node_id;
-
-int max_node;
-
 /* Maps a cpu to the node its on. */
-int* cpu_to_node;
+int cpu_to_node[NUM_NUMA_NODES];
 #endif
 
 static radix_interior_t* radix_root;
 
-/* Dangerous. We need a more robust way of letting multiple processes
- * use superpages. */
-static char superpage_location[256];
-
-/* Protects all superpage operations. */
+/* All superpage related structures. The lock protects 
+ * the other two structures. */
+#ifdef NUMA
+static __thread lock_t super_lock;
+static __thread double_list_t superpage_list;
+static __thread quickieblock_t sph_pageblocks;
+#else
 static lock_t super_lock;
-
-/* File descriptor for the superpage file; protected by super_lock. */
-static int superpage_fd;
-
-/* Used when mmaping a new superpage; need to know the proper offset 
- * into the file; protected by super_lock. */
-static unsigned long super_file_offset;
-
-/* SuperPage Header pageblocks; protected by super_lock. */
+static double_list_t superpage_list;
 static quickieblock_t sph_pageblocks;
+#endif
 
 #ifdef BIBOP
 /* Each page in virtual memory has an entry in the page vector that records two 
@@ -99,49 +107,52 @@ static __thread counting_queue_t local_inactive_pageblocks[PAGEBLOCK_SIZE_CLASSE
 static counting_lf_lifo_queue_t global_partial_pageblocks[OBJECT_SIZE_CLASSES];
 static counting_lf_lifo_queue_t global_free_pageblocks[PAGEBLOCK_SIZE_CLASSES];
 
-/* global list of superpages */
-static double_list_t superpage_list;
-
 static inline unsigned int quick_log2(unsigned int x);
 static inline int max(int a, int b);
 static inline int compute_size_class(size_t size);
+static inline int malloc_compute_size_class(size_t size);
+static inline int free_compute_size_class(size_t size);
 static inline int reverse_size_class(size_t size_class);
 
 /* Radix tree operations. */
-static inline void radix_register(void* start, int num_pages, void* ptr, size_t size, short object_type);
+static void radix_register(void* start, int num_pages, void* ptr, size_t size, short object_type);
 static inline void radix_extract(void* object, void** ptr, size_t* size, short* is_large);
+static inline radix_interior_t* radix_interior_alloc(void);
+static inline radix_leaf_t* radix_leaf_alloc(void);
+static inline void radix_interior_free(radix_interior_t* node);
+static inline void radix_leaf_free(radix_leaf_t* node);
 
 /* Operations on quickie pageblocks. */
-static inline void* quickie_alloc(quickieblock_t* quickie, size_t object_size);
+static void* quickie_alloc(quickieblock_t* quickie, size_t object_size);
 static inline void quickie_free(quickieblock_t* quickie, void* object);
 
 /* Buddy operations on superpages. */
 static inline int find_index(superpage_t* super, page_chunk_t* chunk, int order);
 static inline void* find_buddy(superpage_t* super, page_chunk_t* chunk, int order);
 static inline int find_bit_index(superpage_t* super, page_chunk_t* chunk, int order);
-static inline void* buddy_alloc(superpage_t* super, size_t size);
-static inline void buddy_free(superpage_t* super, void* start, size_t length);
+static void* buddy_alloc(superpage_t* super, size_t size);
+static void buddy_free(superpage_t* super, void* start, size_t length);
 
 /* All other superpage operations. */
-static inline void get_free_superpage(superpage_t** sp, size_t size);
-static inline void* supermap(size_t size);
-static inline void superunmap(void* start, size_t length);
+static void get_free_superpage(superpage_t** sp, size_t size);
+static void* supermap(size_t size);
+static void superunmap(void* start, size_t length);
 
 /* All virtual page operations. */
 static inline void register_pages(void* start, int num_pages, void* ptr, size_t size, short object_type);
 static inline void* page_alloc(size_t size);
 static inline void page_free(void* start, size_t length);
-static inline void* medium_or_large_alloc(size_t size);
+static void* medium_or_large_alloc(size_t size);
 
 /* All operations on the global free list. */
-static inline void insert_global_free_pageblocks(pageblock_t* pageblock);
-static inline void insert_global_partial_pageblocks(pageblock_t* pageblock, int class_index);
-static inline pageblock_t* remove_global_pageblocks(int class_index, int pageblock_size);
+static void insert_global_free_pageblocks(pageblock_t* pageblock);
+static void insert_global_partial_pageblocks(pageblock_t* pageblock, int class_index);
+static pageblock_t* remove_global_pageblocks(int class_index, int pageblock_size);
 
 /* All double list operations. */
-static inline void double_list_insert_front(void* new_node, double_list_t* list);
-static inline void double_list_rotate_back(double_list_t* list);
-static inline void double_list_remove(void* node, double_list_t* list);
+static void double_list_insert_front(void* new_node, double_list_t* list);
+static void double_list_rotate_back(double_list_t* list);
+static void double_list_remove(void* node, double_list_t* list);
 
 /* Helper functions for malloc */
 static inline void headerize_object(void** object, void* ptr, size_t size, short object_type);
@@ -150,8 +161,8 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index);
 
 /* Helper functions for free. */
 static inline void local_free(void* object, pageblock_t* pageblock, heap_t* my_heap);
-static inline void remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap);
-static inline void adopt_pageblock(void* object, pageblock_t* pageblock, heap_t* my_heap);
+static void remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap);
+static void adopt_pageblock(void* object, pageblock_t* pageblock, heap_t* my_heap);
 
 static const int base[] = {	0, 16, 24, 28, 30, 31, 31, 32, 32, 32, 
 				32, 33, 33, 33, 33, 34, 34, 34, 34, 35, 
@@ -218,6 +229,28 @@ static const int reverse[] = {	4, 8, 12, 16, 20, 24, 28, 32, 36, 40,
 				12992, 13248, 13504, 13760, 14016, 14272, 14528, 14784, 15040, 15296,
 				15552, 15808, 16064, 16320, 16576 }; 
 
+static inline unsigned long get_cycles(void);
+
+#if __INTEL_COMPILER
+#include <ia64intrin.h>
+inline static unsigned long get_cycles(void)
+{
+	unsigned long long t;
+	t = __getReg(_IA64_REG_AR_ITC);
+	return t;
+}
+#else
+inline static unsigned long get_cycles(void)
+{
+	unsigned long tmp;
+	__asm__ __volatile__("mov %0=ar.itc":"=r"(tmp)::"memory");
+	return tmp;
+}
+#endif
+     
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
 /* If we're collecting memory stats, does an atomic add. If not, does nothing. */
 static inline void memory_add32(volatile unsigned int* address, int value)
 {
@@ -273,15 +306,63 @@ static inline int compute_size_class(size_t size)
 		size = OBJECT_GRANULARITY;
 	}
 
-	unsigned int bin = size / (CACHE_LINE_SIZE / 2);
-	unsigned int position = (size - 1) % (CACHE_LINE_SIZE / 2);
+	unsigned int bin = size / (CACHE_LINE_SIZE >> 1);
+	unsigned int position = (size - 1) % (CACHE_LINE_SIZE >> 1);
 
-	if (size % (CACHE_LINE_SIZE / 2) == 0) {
-		bin = (size - 1) / (CACHE_LINE_SIZE / 2);
-		position = (size - 2) % (CACHE_LINE_SIZE / 2);
+	if (size % (CACHE_LINE_SIZE >> 1) == 0) {
+		bin = (size - 1) / (CACHE_LINE_SIZE >> 1);
+		position = (size - 2) % (CACHE_LINE_SIZE >> 1);
 	}
 
 	return base[bin] + (position / factor[bin]);
+}
+
+static inline int malloc_compute_size_class(size_t size)
+{
+#ifdef PROFILE
+	//unsigned long long local_malloc_compute_cycles = get_cycles();
+#endif 
+	if (size < OBJECT_GRANULARITY) {
+		size = OBJECT_GRANULARITY;
+	}
+
+	unsigned int bin = size / (CACHE_LINE_SIZE >> 1);
+	unsigned int position = (size - 1) % (CACHE_LINE_SIZE >> 1);
+
+	if (size % (CACHE_LINE_SIZE >> 1) == 0) {
+		bin = (size - 1) / (CACHE_LINE_SIZE >> 1);
+		position = (size - 2) % (CACHE_LINE_SIZE >> 1);
+	}
+
+	int ret = base[bin] + (position / factor[bin]);
+#ifdef PROFILE
+	//malloc_compute_cycles += get_cycles() - local_malloc_compute_cycles;
+#endif
+	return ret;
+}
+
+static inline int free_compute_size_class(size_t size)
+{
+#ifdef PROFILE
+	//unsigned long long local_free_compute_cycles = get_cycles();
+#endif
+	if (size < OBJECT_GRANULARITY) {
+		size = OBJECT_GRANULARITY;
+	}
+
+	unsigned int bin = size / (CACHE_LINE_SIZE >> 1);
+	unsigned int position = (size - 1) % (CACHE_LINE_SIZE >> 1);
+
+	if (size % (CACHE_LINE_SIZE >> 1) == 0) {
+		bin = (size - 1) / (CACHE_LINE_SIZE >> 1);
+		position = (size - 2) % (CACHE_LINE_SIZE >> 1);
+	}
+
+	int ret = base[bin] + (position / factor[bin]);
+#ifdef PROFILE
+	//free_compute_cycles += get_cycles() - local_free_compute_cycles;
+#endif
+	return ret;
 }
 
 static inline int reverse_size_class(size_t size_class)
@@ -289,49 +370,29 @@ static inline int reverse_size_class(size_t size_class)
 	return reverse[size_class];
 }
 
-static inline radix_interior_t* radix_interior_alloc()
+static inline radix_interior_t* radix_interior_alloc(void)
 {
-	void* node = mmap(NULL, sizeof(radix_interior_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	/*
-	fprintf(stderr, "radix_interior(): %p\n", node);
-	fflush(stderr);
-	*/
-	if (node == MAP_FAILED) {
-		fprintf(stderr, "radix_interior_alloc() mmap of size %zd failed\n", sizeof(radix_interior_t));
-		fflush(stderr);
-		exit(1);
-	}
-
+	void* node = page_alloc(sizeof(radix_interior_t));
 	return (radix_interior_t*)node;
 }
 
-static inline radix_leaf_t* radix_leaf_alloc()
+static inline radix_leaf_t* radix_leaf_alloc(void)
 {
-	void* node = mmap(NULL, sizeof(radix_leaf_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	/*
-	fprintf(stderr, "radix_leaf(): %p\n", node);
-	fflush(stderr);
-	*/
-	if (node == MAP_FAILED) {
-		fprintf(stderr, "radix_leaf_alloc() mmap of size %zd failed\n", sizeof(radix_leaf_t));
-		fflush(stderr);
-		exit(1);
-	}
-
+	void* node = page_alloc(sizeof(radix_leaf_t));
 	return (radix_leaf_t*)node;
 }
 
 static inline void radix_interior_free(radix_interior_t* node)
 {
-	munmap(node, sizeof(radix_interior_t));
+	page_free(node, sizeof(radix_interior_t));
 }
 
 static inline void radix_leaf_free(radix_leaf_t* node)
 {
-	munmap(node, sizeof(radix_leaf_t));
+	page_free(node, sizeof(radix_leaf_t));
 }
 
-static inline void radix_register(void* start, int num_pages, void* ptr, size_t size, short object_type)
+static void radix_register(void* start, int num_pages, void* ptr, size_t size, short object_type)
 {
 	/* Ensure in a lock-free manner that we have a root node. */
 	if (radix_root == NULL) {
@@ -343,7 +404,7 @@ static inline void radix_register(void* start, int num_pages, void* ptr, size_t 
 
 	int i;
 
-	unsigned int log_size;
+	unsigned int log_size = 0;
 	if (object_type == OBJECT_MEDIUM) {
 		log_size = quick_log2(size / PAGE_SIZE);
 	}
@@ -454,9 +515,9 @@ static inline int find_bit_index(superpage_t* super, page_chunk_t* chunk, int or
 
 /* Allocates size pages from the buddy allocation scheme.
  * size is guarenteed to be a multiple of PAGE_SIZE. */
-static inline void* buddy_alloc(superpage_t* super, size_t size)
+static void* buddy_alloc(superpage_t* super, size_t size)
 {
-	page_chunk_t* chunk;
+	page_chunk_t* chunk = NULL;
 	unsigned int order = quick_log2(size / PAGE_SIZE);
 	unsigned int curr_order;
 
@@ -509,7 +570,7 @@ static inline void* buddy_alloc(superpage_t* super, size_t size)
 }
 
 /* Frees pages back to the buddy scheme. */
-static inline void buddy_free(superpage_t* super, void* start, size_t length)
+static void buddy_free(superpage_t* super, void* start, size_t length)
 {
 	page_chunk_t* chunk = (page_chunk_t*)start;
 	page_chunk_t* buddy;
@@ -546,13 +607,13 @@ static inline void buddy_free(superpage_t* super, void* start, size_t length)
 		}
 	}
 	else {
-		munmap(chunk, SUPERPAGE_SIZE);
-		double_list_remove(super, &superpage_list);
-		quickie_free(&sph_pageblocks, super);
+		page_free(chunk, SUPERPAGE_SIZE);
+		double_list_remove(super, super->list);
+		quickie_free(super->quickie, super);
 	}
 }
 
-static inline void* quickie_alloc(quickieblock_t* quickie, size_t object_size)
+static void* quickie_alloc(quickieblock_t* quickie, size_t object_size)
 {
 	void* object;
 
@@ -560,17 +621,7 @@ static inline void* quickie_alloc(quickieblock_t* quickie, size_t object_size)
 	 * this function is called (in which case unallocated will not point to 
 	 * anything), and when there is no more space in the last pageblock we allocated. */
 	if (quickie->unallocated == NULL || quickie->num_free_objects == 0) {
-		quickie->unallocated = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-		/*
-		fprintf(stderr, "quickie_alloc(): %p\n", quickie->unallocated);
-		fflush(stderr);
-		*/
-		if (quickie->unallocated == MAP_FAILED) {
-			fprintf(stderr, "quickie_alloc() mmap failed\n");
-			fflush(stderr);
-			exit(1);
-		}
-
+		quickie->unallocated = page_alloc(PAGE_SIZE);
 		quickie->num_free_objects = PAGE_SIZE / object_size;
 	}
 
@@ -593,57 +644,7 @@ static inline void quickie_free(quickieblock_t* quickie, void* object)
 	quickie->freed = (void*)object;
 }
 
-static inline void set_superpage_location()
-{
-	DIR* slash_tmp;
-	char tmp_location[256];
-
-	slash_tmp = opendir(SUPERPAGE_TEMP);
-	if (!slash_tmp) {
-		fprintf(stderr, "set_superpage_location(): ");
-		switch (errno) {
-			case EACCES:	fprintf(stderr, "EACCESS"); break;
-			case EMFILE:	fprintf(stderr, "EMFILE"); break;
-			case ENFILE:	fprintf(stderr, "ENFILE"); break;
-			case ENOENT:	fprintf(stderr, "ENOENT"); break;
-			case ENOMEM:	fprintf(stderr, "ENOMEM"); break;
-			case ENOTDIR:	fprintf(stderr, "ENOTDIR"); break;
-		}
-		fprintf(stderr, "\n");
-		fflush(stderr);
-		exit(1);
-	}
-
-	union {
-		struct dirent d;
-		char b[offsetof (struct dirent, d_name) + NAME_MAX + 1];
-	} entry;
-	struct dirent* result;
-
-	while (1) {
-		if (readdir_r(slash_tmp, &entry, &result)) {
-			fprintf(stderr, "set_superpage_location(): readdir_r\n");
-			fflush(stderr);
-			exit(1);
-		}
-
-		if (!strcmp(result->d_name, ".") || !strcmp(result->d_name, "..")) {
-			continue;
-		}
-
-		strcpy(tmp_location, SUPERPAGE_TEMP);
-		strcat(tmp_location, result->d_name);
-
-		if (!unlink(tmp_location)) {
-			break;
-		}
-	}
-		
-	strcpy(superpage_location, SUPERPAGE_DIRECTORY);
-	strcat(superpage_location, result->d_name);
-}
-
-static inline void get_free_superpage(superpage_t** super, size_t size)
+static void get_free_superpage(superpage_t** super, size_t size)
 {
 	double_list_elem_t* curr;
 	double_list_elem_t* first;
@@ -673,58 +674,8 @@ static inline void get_free_superpage(superpage_t** super, size_t size)
 
 	/* If we couldn't find an existing superpage, get a new one from OS. */
 	if (*super == NULL) {
-
-#ifdef SUPERPAGES
-		if (!superpage_fd) {
-			set_superpage_location();
-
-			superpage_fd = open(superpage_location, O_RDWR | O_CREAT /*| O_TRUNC*/, 0777);
-			if (superpage_fd < 0) {
-				fprintf(stderr, "get_free_superpage() open failed\n");
-				fflush(stderr);
-				exit(1);
-			}
-		}
-#endif
-
 		*super = (superpage_t*)quickie_alloc(&sph_pageblocks, sizeof(superpage_t));
-
-		/* If the file_offset is zero, then this is a never-before used header and we 
-		 * need to get a file offset from the global counter. If not, we can 
-		 * just recycle the old one. */
-		if ((*super)->file_offset == 0) {
-			(*super)->file_offset = super_file_offset;
-			super_file_offset += SUPERPAGE_SIZE;
-		}
-
-#ifdef SUPERPAGES
-		(*super)->page_pool = (superpage_t*)mmap(	NULL, SUPERPAGE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, 
-								superpage_fd, (*super)->file_offset);
-#else
-		(*super)->page_pool = mmap(NULL, SUPERPAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-		/*
-		fprintf(stderr, "get_free_superpage(): %p\n", (*super)->page_pool);
-		fflush(stderr);
-		*/
-#endif
-
-		if ((*super)->page_pool == MAP_FAILED) {
-			fprintf(stderr, "get_free_superpage() mmap failed\n");
-			switch (errno) {
-				case EACCES:	fprintf(stderr, "EACCES\n"); break;
-				case EAGAIN:	fprintf(stderr, "EAGAIN\n"); break;
-				case EBADF:	fprintf(stderr, "EBADF\n"); break;
-				case EINVAL:	fprintf(stderr, "EINVAL\n"); break;
-				case ENFILE:	fprintf(stderr, "ENFILE\n"); break;
-				case ENODEV:	fprintf(stderr, "ENODEV\n"); break;
-				case ENOMEM:	fprintf(stderr, "ENOMEM\n"); break;
-				case EPERM:	fprintf(stderr, "EPERM\n"); break;
-				case ETXTBSY:	fprintf(stderr, "ETXTBSY\n"); break;
-				default:	fprintf(stderr, "other\n");
-			}
-			fflush(stderr);
-			exit(1);
-		}
+		(*super)->page_pool = page_alloc(SUPERPAGE_SIZE);
 		
 		/* Initialize bitmaps for buddy allocation */
 		int byte = 0;
@@ -735,20 +686,30 @@ static inline void get_free_superpage(superpage_t** super, size_t size)
 		}
 		memset((*super)->bitmaps, 0, BUDDY_BITMAP_SIZE); 
 
+		/* The thread local super lock governs all superpages owned by 
+		 * this thread. It doubles as a thread ID. */
+		(*super)->lock = &super_lock;
+		(*super)->list = &superpage_list;
+		(*super)->quickie = &sph_pageblocks;
+
 		/* Stick the entire superpage into the buddy allocation scheme. */
 		double_list_insert_front((*super)->page_pool, &((*super)->buddy[BUDDY_ORDER_MAX - 1].free_list));
 		(*super)->largest_free_order = BUDDY_ORDER_MAX - 1;
-
 		double_list_insert_front(*super, &superpage_list);
 	}
 }
 
-static inline void* supermap(size_t size)
+static void* supermap(size_t size)
 {
 	superpage_t* super;
 	void* pages;
 
+#ifdef PROFILE
+	//unsigned long long local_supermap_cycles = get_cycles();
+#endif
+
 	spin_lock(&super_lock);
+
 	get_free_superpage(&super, size);
 
 	/* Allocate pages from the superpage. */
@@ -761,19 +722,34 @@ static inline void* supermap(size_t size)
 
 	spin_unlock(&super_lock);
 
+#ifdef PROFILE
+	//supermap_cycles += get_cycles() - local_supermap_cycles;
+#endif
+
 	return pages;
 }
 
-static inline void superunmap(void* start, size_t length)
+static void superunmap(void* start, size_t length)
 {
-	superpage_t* super;
+	superpage_t* super = ((pageblock_t*)start)->sph;
+	lock_t* lock;
 
-	spin_lock(&super_lock);
+#ifdef PROFILE
+	//unsigned long long local_superunmap_cycles = get_cycles();
+#endif
 
-	super = ((pageblock_t*)start)->sph;
+#ifdef NUMA
+	lock = super->lock;
+#else
+	lock = &super_lock;
+#endif
+	spin_lock(lock);
 	buddy_free(super, start, length);
+	spin_unlock(lock);
 
-	spin_unlock(&super_lock);
+#ifdef PROFILE
+	//local_superunmap_cycles += get_cycles() - local_superunmap_cycles;
+#endif
 }
 
 /* If not using headers, registers pages in appropriate data structure. 
@@ -804,33 +780,30 @@ static inline void register_pages(void* start, int num_pages, void* ptr, size_t 
 #endif
 }
 
-/* Makes a request to whoever manages pages (us or kernel). */
+/* Makes a request to the system for size bytes. */
 static inline void* page_alloc(size_t size)
 {
 	void* addr;
 
 	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	/*
-	fprintf(stderr, "page_alloc(): %p\n", addr);
-	fflush(stderr);
-	*/
 	if (addr == MAP_FAILED) {
+		perror("page_alloc");
 		fprintf(stderr, "page_alloc() mmap of size %zd failed\n", size);
 		fflush(stderr);
 		exit(1);
 	}
 
-	return((void *)addr);
+	return addr;
 }
 
-/* Frees pages to whoever manages pages (us or kernel). */
+/* Frees length bytes to the system. */
 static inline void page_free(void* start, size_t length)
 {
 	munmap(start, length);
 }
 
 /* Gets a large amount of memory from the OS and tags it appropriately. */
-static inline void* medium_or_large_alloc(size_t size)
+static void* medium_or_large_alloc(size_t size)
 {
 	void* mem;
 	
@@ -863,12 +836,12 @@ static inline void* medium_or_large_alloc(size_t size)
 }
 
 /* Adds a pageblock to one of the global lists, or frees it to the OS/page manager. */
-static inline void insert_global_free_pageblocks(pageblock_t* pageblock)
+static void insert_global_free_pageblocks(pageblock_t* pageblock)
 {
-	int size_index = quick_log2((pageblock->mem_pool_size + (unsigned long)pageblock->mem_pool - (unsigned long)pageblock) / PAGE_SIZE) - quick_log2(MIN_PAGEBLOCK_SIZE / PAGE_SIZE);
+	int size_index = quick_log2((pageblock->mem_pool_size + (unsigned long)pageblock->mem_pool - (unsigned long)pageblock) / PAGE_SIZE)
+			- quick_log2(MIN_PAGEBLOCK_SIZE / PAGE_SIZE);
 
 	if (global_free_pageblocks[size_index].count >= MAX_GLOBAL_INACTIVE) {
-		//page_free(pageblock, pageblock->mem_pool_size + CACHE_LINE_SIZE);
 		superunmap(pageblock, pageblock->mem_pool_size + CACHE_LINE_SIZE);
 	}
 	else {
@@ -877,14 +850,14 @@ static inline void insert_global_free_pageblocks(pageblock_t* pageblock)
 	}
 }
 
-static inline void insert_global_partial_pageblocks(pageblock_t* pageblock, int class_index)
+static void insert_global_partial_pageblocks(pageblock_t* pageblock, int class_index)
 {
 	atmc_add32(&global_partial_pageblocks[class_index].count, 1);
 	lf_lifo_enqueue(&global_partial_pageblocks[class_index].queue, pageblock);
 }
 
 /* Attempts to get a global pageblock. */
-static inline pageblock_t* remove_global_pageblocks(int class_index, int pageblock_size)
+static pageblock_t* remove_global_pageblocks(int class_index, int pageblock_size)
 {
 	pageblock_t* pageblock = (pageblock_t*)lf_lifo_dequeue(&global_partial_pageblocks[class_index].queue);
 	if (pageblock) {
@@ -903,7 +876,7 @@ static inline pageblock_t* remove_global_pageblocks(int class_index, int pageblo
 }
 
 /* Places new_node at the front of the list. */
-static inline void double_list_insert_front(void* new_node, double_list_t* list)
+static void double_list_insert_front(void* new_node, double_list_t* list)
 {
 	double_list_elem_t* elem_new = (double_list_elem_t*)new_node;
 	double_list_elem_t* old_head = list->head;
@@ -921,7 +894,7 @@ static inline void double_list_insert_front(void* new_node, double_list_t* list)
 }
 
 /* Moves head to the back. */
-static inline void double_list_rotate_back(double_list_t* list)
+static void double_list_rotate_back(double_list_t* list)
 {
 	double_list_elem_t* old_head = list->head;
 	double_list_elem_t* old_tail = list->tail;
@@ -943,7 +916,7 @@ static inline void double_list_rotate_back(double_list_t* list)
 }
 
 /* Removes node from the list. */
-static inline void double_list_remove(void* node, double_list_t* list)
+static void double_list_remove(void* node, double_list_t* list)
 {
 	double_list_elem_t* elem_node = (double_list_elem_t*)node;
 
@@ -970,17 +943,24 @@ static inline void double_list_remove(void* node, double_list_t* list)
 }
 
 /* Garbage collect a single pageblock. */
-static inline void garbage_collect(pageblock_t* collectee)
+static void garbage_collect(pageblock_t* collectee)
 {
 	unsigned int chain;
 	queue_node_t header;
 	unsigned short index;
+#ifdef PROFILE
+	//unsigned long long local_garbage_cycles = get_cycles();
+#endif
 
 	chain = lf_lifo_chain_dequeue_nABA32((unsigned int *)&(collectee->garbage_head));
 	header = *((queue_node_t*)&chain);
 	index = header.next;
 	collectee->freed = index;
 	collectee->num_free_objects += ((queue_node_t *)&header)->count;
+
+#ifdef PROFILE
+	//garbage_cycles += get_cycles() - local_garbage_cycles;
+#endif
 }
 
 void streamflow_thread_finalize(void)
@@ -1064,6 +1044,10 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 	int pageblock_size;
 	int size_index;
 
+#ifdef PROFILE
+	//unsigned long long local_get_pgblk_cycles = get_cycles();
+#endif
+
 	pageblock_size = compute_pageblock_size(index);
 	size_index = quick_log2(pageblock_size / PAGE_SIZE) - quick_log2(MIN_PAGEBLOCK_SIZE / PAGE_SIZE);
 
@@ -1084,7 +1068,6 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 
 	/* If there were no pre-allocated pageblocks, we need to grab one from the OS. */
 	if (pageblock == NULL) {
-		//pageblock = (pageblock_t*)page_alloc(pageblock_size);
 		pageblock = (pageblock_t*)supermap(pageblock_size);
 		register_pages(pageblock, pageblock_size / PAGE_SIZE, pageblock, 0, OBJECT_SMALL);
 
@@ -1110,6 +1093,10 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 	/* New pageblock goes to front of active list. */
 	double_list_insert_front(pageblock, &heap->active_pageblocks);
 
+#ifdef PROFILE
+	//get_pgblk_cycles += get_cycles() - local_get_pgblk_cycles;
+#endif
+
 	return pageblock;
 }
 
@@ -1122,9 +1109,28 @@ void timer_handler(int sig)
 	fflush(stderr);
 }
 
+void cycle_counts(int sig)
+{
+#ifdef PROFILE
+	printf("malloc:         %llu\t%llu\n", malloc_cycles, malloc_calls);
+	printf("  compute:      %llu\n", malloc_compute_cycles);
+	printf("  garbage:      %llu\n", garbage_cycles);
+	printf("  get_pgblk:    %llu\n", get_pgblk_cycles);
+	printf("    supermap:   %llu\n", supermap_cycles);
+	printf("\n");
+	printf("free:           %llu\t%llu\n", free_cycles, free_calls);
+	printf("  extract:      %llu\n", extract_cycles);
+	printf("  compute:      %llu\n", free_compute_cycles);
+	printf("  local_free:   %llu\n", local_free_cycles);
+	printf("    superunmap: %llu\n", superunmap_cycles);
+	printf("  remote_free:  %llu\n", remote_free_cycles);
+	printf("  adopt_pgblk:  %llu\n", adopt_pgblk_cycles);
+#endif
+}
+
 /* Checks to see if memory stuff has been initialized. If we're
  * not collecting memory stats, does nothing. */
-static inline void memory_init_check()
+static inline void memory_init_check(void)
 {
 #ifdef MEMORY
 	if (!init_flag) {
@@ -1173,6 +1179,11 @@ void* malloc(size_t requested_size)
 	pageblock_t *pageblock;
 	heap_t *heap;
 
+#ifdef PROFILE
+	unsigned long long local_malloc_cycles = get_cycles();
+	++malloc_calls;
+#endif
+
 	memory_init_check();
 	
 	if (requested_size == 0) {
@@ -1192,7 +1203,7 @@ void* malloc(size_t requested_size)
 	memory_add32(&num_total_small, 1);
 	memory_add64(&size_total_small, requested_size);
 
-	index = compute_size_class(requested_size);
+	index = malloc_compute_size_class(requested_size);
 
 	heap = &local_heap[index];
 	pageblock = (pageblock_t*)heap->active_pageblocks.head;
@@ -1235,11 +1246,19 @@ void* malloc(size_t requested_size)
 
 	headerize_object(&pointer, pageblock, requested_size, OBJECT_SMALL);
 
+#ifdef PROFILE
+	malloc_cycles += get_cycles() - local_malloc_cycles;
+#endif
+
 	return pointer;
 }
 
 static inline void local_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
 {
+#ifdef PROFILE
+	//unsigned long long local_local_free_cycles = get_cycles();
+#endif
+
 	((queue_node_t *)object)->next = pageblock->freed;
 	pageblock->freed = ((unsigned long)object - (unsigned long)pageblock->mem_pool) / pageblock->object_size + 1;
 
@@ -1264,10 +1283,18 @@ static inline void local_free(void* object, pageblock_t* pageblock, heap_t* my_h
 		double_list_remove(pageblock, &my_heap->active_pageblocks);
 		double_list_insert_front(pageblock, &my_heap->active_pageblocks);
 	}
+	
+#ifdef PROFILE
+	//local_free_cycles += get_cycles() - local_local_free_cycles;
+#endif
 }
 
-static inline void adopt_pageblock(void* object, pageblock_t* pageblock, heap_t* my_heap)
+static void adopt_pageblock(void* object, pageblock_t* pageblock, heap_t* my_heap)
 {
+#ifdef PROFILE
+	unsigned long long local_adopt_pgblk_cycles = get_cycles();
+#endif
+
 	/* So we try to adopt it. If we succeed, treat it like our own. If we fail, 
 	 * let the new parent deal with it. */
 	if (compare_and_swap32(&pageblock->owning_thread, ORPHAN, thread_id)) {
@@ -1279,14 +1306,22 @@ static inline void adopt_pageblock(void* object, pageblock_t* pageblock, heap_t*
 	else {
 		remote_free(object, pageblock, my_heap);
 	}
+
+#ifdef PROFILE
+	adopt_pgblk_cycles += get_cycles() - local_adopt_pgblk_cycles;
+#endif
 }
 
-static inline void remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
+static void remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
 {
 	queue_node_t temp_head, index;
 	unsigned int temp_id;
 	unsigned long long old_value;
 	unsigned long long new_value;
+
+#ifdef PROFILE
+	unsigned long long local_remote_free_cycles = get_cycles();
+#endif
 
 	memory_add32(&num_remote_frees, 1);
 
@@ -1308,9 +1343,13 @@ static inline void remote_free(void* object, pageblock_t* pageblock, heap_t* my_
 		((unsigned int*)&new_value)[0] = temp_id;
 		((unsigned int*)&new_value)[1] = *((unsigned int*)&index);
 	} while(!compare_and_swap64(&pageblock->together, old_value, new_value));
+
+#ifdef PROFILE
+	remote_free_cycles += get_cycles() - local_remote_free_cycles;
+#endif
 }
 
-static inline void chain_remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
+static void chain_remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
 {
 	queue_node_t temp_head, index;
 	unsigned int temp_id;
@@ -1344,6 +1383,9 @@ static inline void chain_remote_free(void* object, pageblock_t* pageblock, heap_
 /* Extracts the meta information for an object for free(). */
 static inline void object_extract(void** object, void** ptr, size_t* size, short* object_type)
 {
+#ifdef PROFILE
+	//unsigned long long local_extract_cycles = get_cycles();
+#endif
 #ifdef HEADERS
 	*object -= sizeof(header_t);
 	*object_type = ((header_t *)*object)->object_type;
@@ -1372,6 +1414,9 @@ static inline void object_extract(void** object, void** ptr, size_t* size, short
 					break;
 	}
 #endif
+#ifdef PROFILE
+	//extract_cycles += get_cycles() - local_extract_cycles;
+#endif
 }
 
 void free(void* object)
@@ -1381,7 +1426,12 @@ void free(void* object)
 	void* ptr;
 	short object_type;
 
-	if (!object) {
+#ifdef PROFILE
+	unsigned long long local_free_cycles = get_cycles();
+	++free_calls;
+#endif
+
+	if (unlikely(!object)) {
 		return;
 	}
 
@@ -1390,21 +1440,21 @@ void free(void* object)
 	object_extract(&object, &ptr, &size, &object_type);
 
 	/* Large, medium or small? We handle each differently. */
-	if (object_type == OBJECT_LARGE) {
-		munmap(object, size);
+	if (unlikely(object_type == OBJECT_LARGE)) {
+		page_free(object, size);
 		return;
 	}
-	else if (object_type == OBJECT_MEDIUM) {
+	else if (unlikely(object_type == OBJECT_MEDIUM)) {
 		((pageblock_t*)object)->sph = (superpage_t*)ptr;
 		superunmap(object, size);
 		return;
 	}
 
 	pageblock = (pageblock_t*)ptr;
-	heap_t* my_heap = &local_heap[compute_size_class(pageblock->object_size)];
+	heap_t* my_heap = &local_heap[free_compute_size_class(pageblock->object_size)];
 
 	/* If we own the pageblock, then we can handle the object free right away. */
-	if (pageblock->owning_thread == thread_id) {
+	if (likely(pageblock->owning_thread == thread_id)) {
 		local_free(object, pageblock, my_heap);
 	}
 
@@ -1462,6 +1512,10 @@ void free(void* object)
 
 		remote_free(object, pageblock, my_heap);
 	}
+
+#ifdef PROFILE
+	free_cycles += get_cycles() - local_free_cycles;
+#endif
 }
 
 void* calloc(size_t nmemb, size_t size)
@@ -1540,7 +1594,7 @@ void *realloc(void *object, size_t size)
 			}
 
 			memcpy(new_object, object, size);
-			munmap(object, old_size);
+			page_free(object, old_size);
 
 			return new_object;
 		}

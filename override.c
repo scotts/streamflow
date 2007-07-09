@@ -24,6 +24,10 @@
 #include <pthread.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
+#include <ctype.h>
+
+#include <sys/types.h>
+#include <linux/unistd.h>
 
 #include "streamflow.h"
 
@@ -36,7 +40,7 @@ typedef struct {
 	void*		app_arg;
 } wrapper_args_t;
 
-void bindme(int context);
+void discover_cpu();
 
 static void* wrapper(void* wargs)
 {
@@ -47,10 +51,9 @@ static void* wrapper(void* wargs)
 	thread_id = atmc_fetch_and_add(&global_id_counter, 1);
 
 #ifdef NUMA
-	node_id = numa_preferred();
-
-	fprintf(stderr, "%d:%d\n", thread_id, node_id);
-	fflush(stderr);
+	/*
+	discover_cpu();
+	*/
 #endif
 
 	munmap(wargs, sizeof(wrapper_args_t));
@@ -126,10 +129,52 @@ void pthread_exit(void* arg)
 }
 
 #ifdef NUMA
-/* Bind this thread to a particular context/core/processor. */
-void bindme(int context)
+/* Discover, through the /proc filesystem, what cpu we're on. */
+void discover_cpu()
 {
+	FILE* stats;
+	unsigned int cpu;
+	int dint;
+	char tcomm[16];
+	char stat;
+	long dlong;
+	unsigned long dulong;
+	unsigned long long dullong;
+	char buffer[512];
+	char proc[] = "/proc/self/task/";
 
+	strcpy(buffer, proc);
+	sprintf(buffer + strlen(proc), "%lu", syscall(__NR_gettid));
+	strcpy(buffer + strlen(buffer), "/stat");
+
+	if ((stats = fopen(buffer, "r")) == NULL) {
+		perror("discover_cpu");
+		exit(1);
+	}
+
+	fscanf(stats, "%d %s %c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %d %ld %llu %lu %ld %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %d %d %lu %lu\n",
+			&dint,
+			tcomm,
+			&stat,
+			&dint, &dint, &dint, &dint, &dint,
+			&dulong, &dulong, &dulong, &dulong, &dulong, &dulong, &dulong,
+			&dlong, &dlong, &dlong, &dlong,
+			&dint, 
+			&dlong,
+			&dullong,
+			&dulong,
+			&dlong,
+			&dulong, &dulong, &dulong, &dulong, &dulong, &dulong, &dulong, 
+			&dulong, &dulong, &dulong, &dulong, &dulong, &dulong,
+			&dint, 
+			&cpu, 
+			&dulong,
+			&dulong);
+
+	printf("thread %d on cpu %d and node%d\n", thread_id, cpu, cpu_to_node[cpu]);
+	fflush(stdout);
+
+	fclose(stats);
 }
 
 /* Determine the cpu-to-node mapping, bind the first thread. */
@@ -145,16 +190,6 @@ void numa_start()
 		exit(1);
 	}
 
-	/* From the man page: "numa_max_node() returns the highest node number 
-	 * available on the current system." It does NOT return the number of nodes. 
-	 * On our system, it starts counting at 0, so the highest node number is one 
-	 * less than the number of nodes. */
-	max_node = numa_max_node() + 1;
-
-	/* I'm not convinced a mmap is the best way to do this. Statically 
-	 * might be better, but we would also need a static max size. */
-	cpu_to_node = (int*)mmap(NULL, sizeof(int) * max_node, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-
 	strcpy(path, NODE_MAP_PATH);
 	root_path_length = strlen(path);
 	root_dir = opendir(path);
@@ -167,7 +202,6 @@ void numa_start()
 		DIR* node_dir;
 		struct dirent* node_entry;
 		unsigned long node;
-		char node_path[NAME_MAX];
 
 		if (strncmp(root_entry->d_name, "node", 4)) {
 			continue;
@@ -194,7 +228,7 @@ void numa_start()
 
 	}
 
-	bindme(0);
+	discover_cpu();
 }
 #endif
 

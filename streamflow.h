@@ -34,10 +34,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
-
-#ifdef NUMA
 #include <numa.h>
-#endif
 
 #include <stddef.h>
 #include <dirent.h>
@@ -45,15 +42,6 @@
 #include "queue.h"
 #include "lock.h"
 #include "bitops.h"
-
-extern unsigned int global_id_counter;
-extern __thread unsigned int thread_id;
-
-#ifdef NUMA
-extern __thread int node_id;
-extern int max_node;
-extern int* cpu_to_node;
-#endif
 
 /* Architecture-dependent parameters. */
 #ifdef x86
@@ -83,6 +71,7 @@ extern int* cpu_to_node;
 #define SUPERPAGE_SIZE		(256 * 1024 * 1024)
 #define BUDDY_ORDER_MAX		15
 #define BUDDY_BITMAP_SIZE	2068
+#define NUM_NUMA_NODES		16
 
 #else
 
@@ -92,6 +81,13 @@ extern int* cpu_to_node;
 
 #if !defined(HEADERS) && !defined(BIBOP) && !defined(RADIX_TREE)
 #error "Must define a meta-information method (HEADERS, BIBOP or RADIX_TREE)."
+#endif
+
+extern unsigned int global_id_counter;
+extern __thread unsigned int thread_id;
+
+#ifdef NUMA
+extern int cpu_to_node[NUM_NUMA_NODES];
 #endif
 
 /* System parameters */
@@ -200,18 +196,19 @@ struct buddy_order {
 
 /* Represents a superpage.*/
 struct superpage {
-	void*			page_pool;			/* points to the superpage itself */
+	void*			page_pool;		/* points to the superpage itself */
 	struct superpage*	next;
 	struct superpage*	prev;
+	lock_t*			lock;			/* points to the lock that belongs to the thread
+							 * that allocated it. */
+	struct double_list*	list;
+	struct quickieblock*	quickie;
 
 	/* Data structures and values used for buddy 
 	 * allocation.*/
 	struct buddy_order	buddy[BUDDY_ORDER_MAX];
 	char			bitmaps[BUDDY_BITMAP_SIZE];
 	unsigned short		largest_free_order;
-
-	unsigned long		file_offset;			/* this superpage's offset into SUPERPAGE_LOCATION */
-
 } __attribute__((aligned(1 << SUPERPAGE_BITS)));
 
 struct pageblock {
@@ -222,8 +219,6 @@ struct pageblock {
 							 * for compatibility with queue_elem_t in queue.h	 */
 	struct pageblock*	prev;			/* points to previous pageblock in pageblock list */
 	unsigned short		freed;			/* points to first free, recycled object */
-	                                                /* ... or to the first block with a recycled object if we *
-	                                                 * are in 'SPATIAL_LOCALITY' mode			  */
 	unsigned short		unallocated;		/* points to first free, never used object */
 	struct heap*		owning_heap;		/* pointer to thread-local object table */
 	int 			object_size;		/* size in bytes of all objects in pageblock; our "size class" */
