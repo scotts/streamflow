@@ -73,6 +73,16 @@
 #define BUDDY_BITMAP_SIZE	2068
 #define NUM_NUMA_NODES		16
 
+#elif x86_64
+
+#define PAGE_SIZE		4096
+#define PAGE_BITS		12
+#define CACHE_LINE_SIZE		128
+#define SUPERPAGE_SIZE		(8 * 1024 * 1024)
+#define BUDDY_ORDER_MAX		12
+#define BUDDY_BITMAP_SIZE	560
+#define NUM_NUMA_NODES		8
+
 #else
 
 #error "Must define an architecture (x86, ppc64, ia64)."
@@ -93,8 +103,6 @@ extern int cpu_to_node[NUM_NUMA_NODES];
 /* System parameters */
 #define PAGES_PER_SUPERPAGE	(SUPERPAGE_SIZE / PAGE_SIZE)
 
-#define SUPERPAGE_DIRECTORY	"/mnt/huge/"
-#define SUPERPAGE_TEMP		"/tmp/supermap/"
 #define NODE_MAP_PATH		"/sys/devices/system/node/"
 
 #define PAGE_PTR_BITS		((sizeof(void*) * 8) - PAGE_BITS)

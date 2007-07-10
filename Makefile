@@ -10,7 +10,8 @@ META_METHOD	= RADIX_TREE
 # 	- ppc64 (IBM PowerPC, 64-bit)
 #	- x86 (Intel x86, 32-bit)
 #	- ia64 (Intel Itanium, 64-bit)	
-ASM		= ia64
+#	- x86_64 (Intel/AMD 64-bit)
+ASM		= x86_64
 
 ifeq ($(ASM), ppc64)
 	BITS = -m64
@@ -21,6 +22,10 @@ ifeq ($(ASM), x86)
 endif
 ifeq ($(ASM), ia64)
 	FPIC = -fPIC
+endif
+ifeq ($(ASM), x86_64)
+	BITS = -m64
+	FPIC= -fPIC
 endif
 
 CC		= gcc
