@@ -86,5 +86,5 @@ recycle:		recycle.c
 			$(CC) $(CFLAGS) $(OPT) -o recycle recycle.c $(LDFLAGS)
 
 larson:			larson.cpp 
-			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp -L$(HOME)/lib -lunwind -ltcmalloc $(LDFLAGS)
+			$(CXX) $(CFLAGS) $(OPT) -o larson larson.cpp -L$(HOME)/lib $(LDFLAGS)
 

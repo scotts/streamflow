@@ -605,7 +605,7 @@ static void * exercise_heap( void *pinput)
   int           victim ;
   long          blk_size ;
   int           range ;
-  volatile char	ch ;
+  volatile char	ch = '0';
 
   if( stopflag ) return 0;
 

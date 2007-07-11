@@ -1349,6 +1349,7 @@ static void remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
 #endif
 }
 
+/*
 static void chain_remote_free(void* object, pageblock_t* pageblock, heap_t* my_heap)
 {
 	queue_node_t temp_head, index;
@@ -1379,6 +1380,7 @@ static void chain_remote_free(void* object, pageblock_t* pageblock, heap_t* my_h
 		((unsigned int*)&new_value)[1] = *((unsigned int*)&index);
 	} while(!compare_and_swap64(&pageblock->together, old_value, new_value));
 }
+*/
 
 /* Extracts the meta information for an object for free(). */
 static inline void object_extract(void** object, void** ptr, size_t* size, short* object_type)
@@ -1421,10 +1423,10 @@ static inline void object_extract(void** object, void** ptr, size_t* size, short
 
 void free(void* object)
 {
-	size_t size;
+	size_t size = 0;
 	pageblock_t *pageblock = NULL;
-	void* ptr;
-	short object_type;
+	void* ptr = NULL;
+	short object_type = OBJECT_SMALL - 1;
 
 #ifdef PROFILE
 	unsigned long long local_free_cycles = get_cycles();
@@ -1562,11 +1564,11 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 
 void *realloc(void *object, size_t size)
 {
-	size_t old_size;
-	void* ptr;
-	short object_type;
+	size_t old_size = 0;
+	void* ptr = NULL;
+	short object_type = OBJECT_SMALL - 1;
 	void* original_object = object;
-	void* new_object;
+	void* new_object = NULL;
 
 
 	if (object == NULL) {

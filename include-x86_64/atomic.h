@@ -8,7 +8,7 @@ static inline unsigned long fetch_and_store(volatile unsigned int *address, unsi
 {
 	__asm__ __volatile__("xchgl %k0,%1"
 		: "=r" (value)
-		: "m" (*address), "" (value)
+		: "m" (*address), "g" (value)
 		: "memory");
 
 	return value;
@@ -48,19 +48,19 @@ static inline unsigned int compare_and_swap32(volatile unsigned int *address, un
 
 	__asm__ __volatile__(LOCK_PREFIX "cmpxchgl %k1,%2"
 		: "=a"(prev)
-		: "r"(new_value), "m"(*address), ""(old_value)
+		: "r"(new_value), "m"(*address), "g"(old_value)
 		: "memory");
 
 	return prev == old_value;
 }
 
-static inline unsigned int compare_and_swap64(volatile unsigned long *address, unsigned long old_value, unsigned long new_value)
+static inline unsigned int compare_and_swap64(volatile unsigned long long *address, unsigned long old_value, unsigned long new_value)
 {
 	unsigned long prev = 0;
 
 	__asm__ __volatile__(LOCK_PREFIX "cmpxchgq %1,%2"
 		: "=a"(prev)
-		: "r"(new_value), "m"(*address), ""(old_value)
+		: "r"(new_value), "m"(*address), "g"(old_value)
 		: "memory");
 
 	return prev == old_value;
@@ -68,7 +68,7 @@ static inline unsigned int compare_and_swap64(volatile unsigned long *address, u
 
 static inline unsigned long compare_and_swap_ptr(volatile void *address, void* old_ptr, void* new_ptr)
 {
-	return compare_and_swap64((volatile unsigned long *)address, (unsigned long)old_ptr, (unsigned long)new_ptr); 
+	return compare_and_swap64((volatile unsigned long long *)address, (unsigned long)old_ptr, (unsigned long)new_ptr); 
 }
 
 #endif

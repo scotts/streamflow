@@ -28,6 +28,7 @@ size_t max_size;
 int iterations = (int)1e8;
 int rate;
 
+/*
 #include <sys/types.h>
 #include <linux/unistd.h>
 
@@ -77,6 +78,8 @@ void discover_cpu()
 
 	fclose(stats);
 }
+*/
+
 double random_number()
 {
 	static long int seed = 547845897;
