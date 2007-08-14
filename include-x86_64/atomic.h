@@ -30,7 +30,7 @@ static inline void atmc_add32(volatile unsigned int* address, int value)
 {
 	__asm__ __volatile__(
 		LOCK_PREFIX "addl %1,%0"
-		: "=m" (address)
+		: "=m" (*address)
 		: "ir" (value), "m" (*address));
 }
 
@@ -38,7 +38,7 @@ static inline void atmc_add64(volatile unsigned long long* address, unsigned lon
 {
 	__asm__ __volatile__(
 		LOCK_PREFIX "addq %1,%0"
-		: "=m" (address)
+		: "=m" (*address)
 		: "ir" (value), "m" (*address));
 }
 
