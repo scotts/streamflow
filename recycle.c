@@ -28,58 +28,6 @@ size_t max_size;
 int iterations = (int)1e8;
 int rate;
 
-/*
-#include <sys/types.h>
-#include <linux/unistd.h>
-
-void discover_cpu()
-{
-	FILE* stats;
-	unsigned int cpu;
-	int dint;
-	char tcomm[16];
-	char stat;
-	long dlong;
-	unsigned long dulong;
-	unsigned long long dullong;
-	char buffer[512];
-	char proc[] = "/proc/self/task/";
-
-	strcpy(buffer, proc);
-	sprintf(buffer + strlen(proc), "%lu", syscall(__NR_gettid));
-	strcpy(buffer + strlen(buffer), "/stat");
-
-	if ((stats = fopen(buffer, "r")) == NULL) {
-		perror("discover_cpu");
-		exit(1);
-	}
-
-	fscanf(stats, "%d %s %c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %d %ld %llu %lu %ld %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %d %d %lu %lu\n",
-			&dint,
-			tcomm,
-			&stat,
-			&dint, &dint, &dint, &dint, &dint,
-			&dulong, &dulong, &dulong, &dulong, &dulong, &dulong, &dulong,
-			&dlong, &dlong, &dlong, &dlong,
-			&dint, 
-			&dlong,
-			&dullong,
-			&dulong,
-			&dlong,
-			&dulong, &dulong, &dulong, &dulong, &dulong, &dulong, &dulong, 
-			&dulong, &dulong, &dulong, &dulong, &dulong, &dulong,
-			&dint, 
-			&cpu, 
-			&dulong,
-			&dulong);
-
-	printf("thread %d on cpu %d\n", syscall(__NR_gettid), cpu);
-	fflush(stdout);
-
-	fclose(stats);
-}
-*/
-
 double random_number()
 {
 	static long int seed = 547845897;
@@ -102,7 +50,7 @@ double random_number()
 
 void* simulate_work(void* arg)
 {
-	unsigned long** reserve = (void**)malloc(rate * sizeof(void*));
+	unsigned long** reserve = malloc(rate * sizeof(void*));
 	int i;
 	int j;
 	double rand;
@@ -110,11 +58,6 @@ void* simulate_work(void* arg)
 
 	for (i = 0; i < iterations; ++i) {
 
-		/*
-		if (i % (int)1e6 == 0) {
-			discover_cpu();
-		}
-		*/
 		if (i % rate == 0 && i != 0) {
 			for (j = 0; j < rate; ++j) {
 				free(reserve[j]);
@@ -138,6 +81,11 @@ int main(int argc, char* argv[])
 	pthread_t* threads;
 
 	//numa_start();
+
+	if (argc < 5) {
+		printf("correct usage: recycle <num threads> <min alloc size> <max alloc size> <alloc rate>\n");
+		exit(0);
+	}
 
 	int num_threads = atoi(argv[1]);
 	min_size = atoi(argv[2]);

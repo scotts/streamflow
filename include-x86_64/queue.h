@@ -31,13 +31,13 @@ typedef struct {
 					  
 /******************************************************************************/
 
-static __inline__ void lf_lifo_queue_init(lf_lifo_queue_t *queue);
-static __inline__ int lf_lifo_enqueue(lf_lifo_queue_t *queue, void *element);
-static __inline__ void *lf_lifo_dequeue(lf_lifo_queue_t *queue);
+static inline void lf_lifo_queue_init(lf_lifo_queue_t *queue);
+static inline int lf_lifo_enqueue(lf_lifo_queue_t *queue, void *element);
+static inline void *lf_lifo_dequeue(lf_lifo_queue_t *queue);
 
 /******************************************************************************/
 
-static __inline__ void lf_lifo_queue_init(lf_lifo_queue_t *queue)
+static inline void lf_lifo_queue_init(lf_lifo_queue_t *queue)
 {
 	queue->both.top = 0;
 	queue->both.ocount = 0;
@@ -45,7 +45,7 @@ static __inline__ void lf_lifo_queue_init(lf_lifo_queue_t *queue)
 
 /******************************************************************************/
 
-static __inline__ void *lf_lifo_dequeue(lf_lifo_queue_t *queue)
+static inline void *lf_lifo_dequeue(lf_lifo_queue_t *queue)
 {
 	top_aba_t head;
 	top_aba_t next;
@@ -65,7 +65,7 @@ static __inline__ void *lf_lifo_dequeue(lf_lifo_queue_t *queue)
 
 /******************************************************************************/
 
-static __inline__ int lf_lifo_enqueue(lf_lifo_queue_t *queue, void *element)
+static inline int lf_lifo_enqueue(lf_lifo_queue_t *queue, void *element)
 {
 	top_aba_t old_top;
 	top_aba_t new_top;
@@ -89,25 +89,25 @@ static __inline__ int lf_lifo_enqueue(lf_lifo_queue_t *queue, void *element)
 /* Non ABA-safe lock-free LIFO queues. They can be safely used whenever we *
  * have single thread that performs all dequeue operations 		   */
  
-static __inline__ void lf_lifo_queue_init_nABA(volatile struct queue_elem_t **head);
-static __inline__ int lf_lifo_enqueue_nABA(volatile struct queue_elem_t **head, void *element);
-static __inline__ void *lf_lifo_dequeue_nABA(volatile struct queue_elem_t **head);
-static __inline__ void *lf_lifo_chain_dequeue_nABA(volatile struct queue_elem_t **head);
+static inline void lf_lifo_queue_init_nABA(volatile struct queue_elem_t **head);
+static inline int lf_lifo_enqueue_nABA(volatile struct queue_elem_t **head, void *element);
+static inline void *lf_lifo_dequeue_nABA(volatile struct queue_elem_t **head);
+static inline void *lf_lifo_chain_dequeue_nABA(volatile struct queue_elem_t **head);
 
 /******************************************************************************/
 
-static __inline__ void lf_lifo_queue_init_nABA(volatile struct queue_elem_t **head)
+static inline void lf_lifo_queue_init_nABA(volatile struct queue_elem_t **head)
 {
 	*head = NULL;
 }
 
-static __inline__ void lf_lifo_queue_init_nABA32(volatile unsigned int *head)
+static inline void lf_lifo_queue_init_nABA32(volatile unsigned int *head)
 {
 	*head = 0;
 }
 /******************************************************************************/
 
-static __inline__ void *lf_lifo_dequeue_nABA(volatile struct queue_elem_t **head)
+static inline void *lf_lifo_dequeue_nABA(volatile struct queue_elem_t **head)
 {
 	struct queue_elem_t 	*top, *next;
 
@@ -124,7 +124,7 @@ static __inline__ void *lf_lifo_dequeue_nABA(volatile struct queue_elem_t **head
 
 /******************************************************************************/
 
-static __inline__ void *lf_lifo_chain_dequeue_nABA(volatile struct queue_elem_t **head)
+static inline void *lf_lifo_chain_dequeue_nABA(volatile struct queue_elem_t **head)
 {
 	struct queue_elem_t 	*top;
 
@@ -138,7 +138,7 @@ static __inline__ void *lf_lifo_chain_dequeue_nABA(volatile struct queue_elem_t 
 	}
 }
 
-static __inline__ unsigned int lf_lifo_chain_dequeue_nABA32(volatile unsigned int *head)
+static inline unsigned int lf_lifo_chain_dequeue_nABA32(volatile unsigned int *head)
 {
 	unsigned int top;
 
@@ -153,7 +153,7 @@ static __inline__ unsigned int lf_lifo_chain_dequeue_nABA32(volatile unsigned in
 }
 
 /******************************************************************************/
-static __inline__ int lf_lifo_enqueue_nABA(volatile struct queue_elem_t **head, void *element)
+static inline int lf_lifo_enqueue_nABA(volatile struct queue_elem_t **head, void *element)
 {
 	struct queue_elem_t 	*top;
 	
@@ -171,20 +171,20 @@ static __inline__ int lf_lifo_enqueue_nABA(volatile struct queue_elem_t **head, 
 
 /* Non-protected, single-threaded LIFO queues				      */
 
-static __inline__ void seq_lifo_queue_init(struct queue_elem_t **head);
-static __inline__ int seq_lifo_enqueue(struct queue_elem_t **head, void *element);
-static __inline__ void *seq_lifo_dequeue(struct queue_elem_t **head);
+static inline void seq_lifo_queue_init(struct queue_elem_t **head);
+static inline int seq_lifo_enqueue(struct queue_elem_t **head, void *element);
+static inline void *seq_lifo_dequeue(struct queue_elem_t **head);
 
 /******************************************************************************/
 
-static __inline__ void seq_lifo_queue_init(struct queue_elem_t **head)
+static inline void seq_lifo_queue_init(struct queue_elem_t **head)
 {
 	*head = NULL;
 }
 
 /******************************************************************************/
 
-static __inline__ void *seq_lifo_dequeue(struct queue_elem_t **head)
+static inline void *seq_lifo_dequeue(struct queue_elem_t **head)
 {
 	struct queue_elem_t 	*top;
 
@@ -197,7 +197,7 @@ static __inline__ void *seq_lifo_dequeue(struct queue_elem_t **head)
 
 /******************************************************************************/
 
-static __inline__ int seq_lifo_enqueue(struct queue_elem_t **head, void *element)
+static inline int seq_lifo_enqueue(struct queue_elem_t **head, void *element)
 {
 	((struct queue_elem_t *)element)->next = *head;
 	*head = (struct queue_elem_t *)element;

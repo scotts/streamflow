@@ -320,7 +320,7 @@ static inline int compute_size_class(size_t size)
 static inline int malloc_compute_size_class(size_t size)
 {
 #ifdef PROFILE
-	//unsigned long long local_malloc_compute_cycles = get_cycles();
+	unsigned long long local_malloc_compute_cycles = get_cycles();
 #endif 
 	if (size < OBJECT_GRANULARITY) {
 		size = OBJECT_GRANULARITY;
@@ -336,7 +336,7 @@ static inline int malloc_compute_size_class(size_t size)
 
 	int ret = base[bin] + (position / factor[bin]);
 #ifdef PROFILE
-	//malloc_compute_cycles += get_cycles() - local_malloc_compute_cycles;
+	malloc_compute_cycles += get_cycles() - local_malloc_compute_cycles;
 #endif
 	return ret;
 }
@@ -344,7 +344,7 @@ static inline int malloc_compute_size_class(size_t size)
 static inline int free_compute_size_class(size_t size)
 {
 #ifdef PROFILE
-	//unsigned long long local_free_compute_cycles = get_cycles();
+	unsigned long long local_free_compute_cycles = get_cycles();
 #endif
 	if (size < OBJECT_GRANULARITY) {
 		size = OBJECT_GRANULARITY;
@@ -360,7 +360,7 @@ static inline int free_compute_size_class(size_t size)
 
 	int ret = base[bin] + (position / factor[bin]);
 #ifdef PROFILE
-	//free_compute_cycles += get_cycles() - local_free_compute_cycles;
+	free_compute_cycles += get_cycles() - local_free_compute_cycles;
 #endif
 	return ret;
 }
@@ -705,7 +705,7 @@ static void* supermap(size_t size)
 	void* pages;
 
 #ifdef PROFILE
-	//unsigned long long local_supermap_cycles = get_cycles();
+	unsigned long long local_supermap_cycles = get_cycles();
 #endif
 
 	spin_lock(&super_lock);
@@ -723,7 +723,7 @@ static void* supermap(size_t size)
 	spin_unlock(&super_lock);
 
 #ifdef PROFILE
-	//supermap_cycles += get_cycles() - local_supermap_cycles;
+	supermap_cycles += get_cycles() - local_supermap_cycles;
 #endif
 
 	return pages;
@@ -735,7 +735,7 @@ static void superunmap(void* start, size_t length)
 	lock_t* lock;
 
 #ifdef PROFILE
-	//unsigned long long local_superunmap_cycles = get_cycles();
+	unsigned long long local_superunmap_cycles = get_cycles();
 #endif
 
 #ifdef NUMA
@@ -748,7 +748,7 @@ static void superunmap(void* start, size_t length)
 	spin_unlock(lock);
 
 #ifdef PROFILE
-	//local_superunmap_cycles += get_cycles() - local_superunmap_cycles;
+	local_superunmap_cycles += get_cycles() - local_superunmap_cycles;
 #endif
 }
 
@@ -949,7 +949,7 @@ static void garbage_collect(pageblock_t* collectee)
 	queue_node_t header;
 	unsigned short index;
 #ifdef PROFILE
-	//unsigned long long local_garbage_cycles = get_cycles();
+	unsigned long long local_garbage_cycles = get_cycles();
 #endif
 
 	chain = lf_lifo_chain_dequeue_nABA32((unsigned int *)&(collectee->garbage_head));
@@ -959,7 +959,7 @@ static void garbage_collect(pageblock_t* collectee)
 	collectee->num_free_objects += ((queue_node_t *)&header)->count;
 
 #ifdef PROFILE
-	//garbage_cycles += get_cycles() - local_garbage_cycles;
+	garbage_cycles += get_cycles() - local_garbage_cycles;
 #endif
 }
 
@@ -1045,7 +1045,7 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 	int size_index;
 
 #ifdef PROFILE
-	//unsigned long long local_get_pgblk_cycles = get_cycles();
+	unsigned long long local_get_pgblk_cycles = get_cycles();
 #endif
 
 	pageblock_size = compute_pageblock_size(index);
@@ -1094,7 +1094,7 @@ static pageblock_t* get_free_pageblock(heap_t* heap, int index)
 	double_list_insert_front(pageblock, &heap->active_pageblocks);
 
 #ifdef PROFILE
-	//get_pgblk_cycles += get_cycles() - local_get_pgblk_cycles;
+	get_pgblk_cycles += get_cycles() - local_get_pgblk_cycles;
 #endif
 
 	return pageblock;

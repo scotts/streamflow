@@ -31,9 +31,8 @@ endif
 CC		= gcc
 CXX		= g++
 
-LDFLAGS		= -lpthread -lm -ldl #-lnuma -L$(HOME)/lib -lmynuma
+LDFLAGS		= -lpthread -lm -ldl #-L$(HOME)/lib 
 CFLAGS		= -D_REENTRANT -D$(ASM) -D$(META_METHOD) $(FPIC)
-#CFLAGS		+= -DNUMA
 #CFLAGS		+= -DPROFILE
 #CFLAGS		+= -DMEMORY
 
@@ -62,8 +61,6 @@ endif
 ifndef OPT
 	$(error Need to define CC.)
 endif
-
-# Rules.
 
 all:	libstreamflow.so recycle larson
 

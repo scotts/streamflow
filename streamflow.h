@@ -46,42 +46,42 @@
 /* Architecture-dependent parameters. */
 #ifdef x86
 
-#define PAGE_SIZE		4096
-#define PAGE_BITS		12
-#define CACHE_LINE_SIZE		128
-#define SUPERPAGE_SIZE		(4 * 1024 * 1024)
-#define BUDDY_ORDER_MAX		11
-#define BUDDY_BITMAP_SIZE	148
-#define PAGES_IN_ADDR_SPACE	1048676	/* (4 gig address space) / (page size) = # of pages in system */
+#define PAGE_SIZE 4096
+#define PAGE_BITS 12
+#define CACHE_LINE_SIZE 128
+#define SUPERPAGE_SIZE (4 * 1024 * 1024)
+#define BUDDY_ORDER_MAX 11
+#define BUDDY_BITMAP_SIZE 148
+#define PAGES_IN_ADDR_SPACE 1048676 /* (4 gig address space) / (page size) = # of pages in system */
 
 #elif ppc64
 
-#define PAGE_SIZE		4096
-#define PAGE_BITS		12
-#define CACHE_LINE_SIZE		128
-#define SUPERPAGE_SIZE		(16 * 1024 * 1024)
-#define BUDDY_ORDER_MAX		13
-#define BUDDY_BITMAP_SIZE	560
+#define PAGE_SIZE 4096
+#define PAGE_BITS 12
+#define CACHE_LINE_SIZE 128
+#define SUPERPAGE_SIZE (16 * 1024 * 1024)
+#define BUDDY_ORDER_MAX 13
+#define BUDDY_BITMAP_SIZE 560
 
 #elif ia64
 
-#define PAGE_SIZE		16384
-#define PAGE_BITS		14
-#define CACHE_LINE_SIZE		128
-#define SUPERPAGE_SIZE		(256 * 1024 * 1024)
-#define BUDDY_ORDER_MAX		15
-#define BUDDY_BITMAP_SIZE	2068
-#define NUM_NUMA_NODES		16
+#define PAGE_SIZE 16384
+#define PAGE_BITS 14
+#define CACHE_LINE_SIZE 128
+#define SUPERPAGE_SIZE (256 * 1024 * 1024)
+#define BUDDY_ORDER_MAX 15
+#define BUDDY_BITMAP_SIZE 2068
+#define NUM_NUMA_NODES 16
 
 #elif x86_64
 
-#define PAGE_SIZE		4096
-#define PAGE_BITS		12
-#define CACHE_LINE_SIZE		128
-#define SUPERPAGE_SIZE		(8 * 1024 * 1024)
-#define BUDDY_ORDER_MAX		12
-#define BUDDY_BITMAP_SIZE	560
-#define NUM_NUMA_NODES		8
+#define PAGE_SIZE 4096
+#define PAGE_BITS 12
+#define CACHE_LINE_SIZE 128
+#define SUPERPAGE_SIZE (8 * 1024 * 1024)
+#define BUDDY_ORDER_MAX 12
+#define BUDDY_BITMAP_SIZE 560
+#define NUM_NUMA_NODES 8
 
 #else
 
@@ -101,42 +101,42 @@ extern int cpu_to_node[NUM_NUMA_NODES];
 #endif
 
 /* System parameters */
-#define PAGES_PER_SUPERPAGE	(SUPERPAGE_SIZE / PAGE_SIZE)
+#define PAGES_PER_SUPERPAGE (SUPERPAGE_SIZE / PAGE_SIZE)
 
-#define NODE_MAP_PATH		"/sys/devices/system/node/"
+#define NODE_MAP_PATH "/sys/devices/system/node/"
 
-#define PAGE_PTR_BITS		((sizeof(void*) * 8) - PAGE_BITS)
-#define HEADER_SIZE		sizeof(void*)
-#define SUPERPAGE_BITS		10
-#define SUPERPAGE_PTR_BITS	((sizeof(void*) * 8) - SUPERPAGE_BITS)		
+#define PAGE_PTR_BITS ((sizeof(void*) * 8) - PAGE_BITS)
+#define HEADER_SIZE sizeof(void*)
+#define SUPERPAGE_BITS 10
+#define SUPERPAGE_PTR_BITS ((sizeof(void*) * 8) - SUPERPAGE_BITS)		
 
 /* Policy parameters */
-#define MAX_PRIVATE_INACTIVE	4	
-#define MAX_GLOBAL_INACTIVE	0
-#define MIN_PAGEBLOCK_SIZE	(4 * PAGE_SIZE)		/* Must be a power-of-2. */
-#define MAX_PAGEBLOCK_SIZE	(4 * 16 * PAGE_SIZE)	/* Must be a power-of-2. */
-#define OBJECT_GRANULARITY	HEADER_SIZE
-#define MAX_OBJECT_SIZE		16576 /*(4 * PAGE_SIZE) */
-#define OBJECT_SIZE_CLASSES	256
-#define OBJECTS_PER_PAGEBLOCK	1024
+#define MAX_PRIVATE_INACTIVE 4	
+#define MAX_GLOBAL_INACTIVE 0
+#define MIN_PAGEBLOCK_SIZE (4 * PAGE_SIZE) /* Must be a power-of-2. */
+#define MAX_PAGEBLOCK_SIZE (4 * 16 * PAGE_SIZE) /* Must be a power-of-2. */
+#define OBJECT_GRANULARITY HEADER_SIZE
+#define MAX_OBJECT_SIZE 16576 /*(4 * PAGE_SIZE) */
+#define OBJECT_SIZE_CLASSES 256
+#define OBJECTS_PER_PAGEBLOCK 1024
 
-#define PAGEBLOCK_SIZE_CLASSES	5	/* log(MAX_PAGEBLOCK_SIZE/PAGE_SIZE) - log(MIN_PAGEBLOCK_SIZE/PAGE_SIZE) + 1 */
-#define ORPHAN			UINT_MAX
+#define PAGEBLOCK_SIZE_CLASSES 5 /* log(MAX_PAGEBLOCK_SIZE/PAGE_SIZE) - log(MIN_PAGEBLOCK_SIZE/PAGE_SIZE) + 1 */
+#define ORPHAN UINT_MAX
 
 /* The radix tree is RADIX_DEPTH levels deep. Hence, we need to split 
  * a page pointer into RADIX_DEPTH prefixes. If the page pointer is not 
  * evenly divisible by RADIX_DEPTH, then the intertior nodes have the 
  * greater number of bits, and the leaves less. */
-#define RADIX_BITS		PAGE_PTR_BITS
-#define RADIX_DEPTH		3
-#define RADIX_INTERIOR_BITS	(((RADIX_BITS + (RADIX_DEPTH - 1)) / RADIX_DEPTH))
-#define RADIX_LEAF_BITS		(RADIX_BITS - 2 * (RADIX_INTERIOR_BITS))
-#define RADIX_INTERIOR_SIZE	(1UL << RADIX_INTERIOR_BITS)
-#define RADIX_LEAF_SIZE		(1UL << RADIX_LEAF_BITS)
+#define RADIX_BITS PAGE_PTR_BITS
+#define RADIX_DEPTH 3
+#define RADIX_INTERIOR_BITS (((RADIX_BITS + (RADIX_DEPTH - 1)) / RADIX_DEPTH))
+#define RADIX_LEAF_BITS (RADIX_BITS - 2 * (RADIX_INTERIOR_BITS))
+#define RADIX_INTERIOR_SIZE (1UL << RADIX_INTERIOR_BITS)
+#define RADIX_LEAF_SIZE (1UL << RADIX_LEAF_BITS)
 
-#define OBJECT_SMALL	0
-#define OBJECT_MEDIUM	1
-#define OBJECT_LARGE	2
+#define OBJECT_SMALL 0
+#define OBJECT_MEDIUM 1
+#define OBJECT_LARGE 2
 
 struct queue_node {
 	unsigned short next;
@@ -167,28 +167,28 @@ struct radix_leaf {
 };
 
 struct double_list_elem {
-	void*				__padding;
-	struct double_list_elem*	next;
-	struct double_list_elem*	prev;
+	void* __padding;
+	struct double_list_elem* next;
+	struct double_list_elem* prev;
 };
 
 struct double_list {
-	struct double_list_elem*	head;
-	struct double_list_elem*	tail;
+	struct double_list_elem* head;
+	struct double_list_elem* tail;
 };
 
 struct counting_queue {
-	struct queue_elem_t*	queue;
-	unsigned int		count;
+	struct queue_elem_t* queue;
+	unsigned int count;
 };
 
 struct counting_lf_lifo_queue {
-	lf_lifo_queue_t		queue;
-	unsigned int		count;
+	lf_lifo_queue_t queue;
+	unsigned int count;
 };
 
 struct heap {
-	struct double_list	active_pageblocks;	/* active pageblocks that don't need synchronization */
+	struct double_list active_pageblocks; /* active pageblocks that don't need synchronization */
 };
 
 /* An array of these gives us the main data structure necessary for 

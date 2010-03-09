@@ -1,12 +1,12 @@
 #ifndef __SYNCHRO_ATOMIC_H__
 #define __SYNCHRO_ATOMIC_H__
 
-#define mb()		__asm__ __volatile__ ("sync" : : : "memory")
+#define mb()		asm volatile ("sync" : : : "memory")
 #define LOCK_PREFIX	"lock ; "
 
 static inline unsigned long fetch_and_store(volatile unsigned int *address, unsigned int value)
 {
-	__asm__ __volatile__("xchgl %k0,%1"
+	asm volatile("xchgl %k0,%1"
 		: "=r" (value)
 		: "m" (*address), "0" (value)
 		: "memory");
@@ -18,7 +18,7 @@ static inline int atmc_fetch_and_add(volatile unsigned int *address, int value)
 {
 	int prev = value;
 
-	__asm__ __volatile__(
+	asm volatile(
 		LOCK_PREFIX "xaddl %0, %1"
 		: "+r" (value), "+m" (*address)
 		: : "memory");
@@ -28,7 +28,7 @@ static inline int atmc_fetch_and_add(volatile unsigned int *address, int value)
 
 static inline void atmc_add32(volatile unsigned int* address, int value)
 {
-	__asm__ __volatile__(
+	asm volatile(
 		LOCK_PREFIX "addl %1,%0"
 		: "=m" (*address)
 		: "ir" (value), "m" (*address));
@@ -36,7 +36,7 @@ static inline void atmc_add32(volatile unsigned int* address, int value)
 
 static inline void atmc_add64(volatile unsigned long long* address, unsigned long long value)
 {
-	__asm__ __volatile__(
+	asm volatile(
 		LOCK_PREFIX "addq %1,%0"
 		: "=m" (*address)
 		: "ir" (value), "m" (*address));
@@ -46,7 +46,7 @@ static inline unsigned int compare_and_swap32(volatile unsigned int *address, un
 {
 	unsigned long prev = 0;
 
-	__asm__ __volatile__(LOCK_PREFIX "cmpxchgl %k1,%2"
+	asm volatile(LOCK_PREFIX "cmpxchgl %k1,%2"
 		: "=a"(prev)
 		: "r"(new_value), "m"(*address), "0"(old_value)
 		: "memory");
@@ -58,7 +58,7 @@ static inline unsigned int compare_and_swap64(volatile unsigned long long *addre
 {
 	unsigned long prev = 0;
 
-	__asm__ __volatile__(LOCK_PREFIX "cmpxchgq %1,%2"
+	asm volatile(LOCK_PREFIX "cmpxchgq %1,%2"
 		: "=a"(prev)
 		: "r"(new_value), "m"(*address), "0"(old_value)
 		: "memory");
