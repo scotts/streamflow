@@ -56,7 +56,7 @@ static __inline__ void *lf_lifo_dequeue(lf_lifo_queue_t *queue)
 		if (head.top == 0)
 			return NULL;
 		next.top = (unsigned long)((struct queue_elem_t *)head.top)->next;
-		next.ocount += 1;
+		next.ocount = head.ocount + 1;
 		if (compare_and_swap64((unsigned long long *)&(queue->both), *((unsigned long long*)&head), *((unsigned long long*)&next))) {
 			return((void *)head.top);
 		}
@@ -76,7 +76,7 @@ static __inline__ int lf_lifo_enqueue(lf_lifo_queue_t *queue, void *element)
 
 		((struct queue_elem_t *)element)->next = (struct queue_elem_t *)old_top.top;
 		new_top.top = (unsigned long)element;
-		new_top.ocount += 1;
+		new_top.ocount = old_top.ocount + 1;
 		if (compare_and_swap64((unsigned long long *)&(queue->both), *((unsigned long long*)&old_top), *((unsigned long long*)&new_top))) {
 			return 0;
 		}
