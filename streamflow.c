@@ -409,11 +409,16 @@ static void radix_register(void* start, int num_pages, void* ptr, size_t size, s
 		log_size = quick_log2(size / PAGE_SIZE);
 	}
 
+#ifdef TOP_HALF
+	unsigned long page = ((unsigned long)start & 0x0000FFFFFFFFFFFFUL) >> PAGE_BITS;
+#else
 	unsigned long page = (unsigned long)start >> PAGE_BITS;
+#endif
+
 	for (i = 0; i < num_pages; ++i) {
-		unsigned long level1 = page >> (RADIX_INTERIOR_BITS + RADIX_LEAF_BITS);
-		unsigned long level2 = (page >> RADIX_LEAF_BITS) & (RADIX_INTERIOR_SIZE - 1);
-		unsigned long level3 = page & (RADIX_LEAF_SIZE - 1);
+		const unsigned long level1 = page >> (RADIX_INTERIOR_BITS + RADIX_LEAF_BITS);
+		const unsigned long level2 = (page >> RADIX_LEAF_BITS) & (RADIX_INTERIOR_SIZE - 1);
+		const unsigned long level3 = page & (RADIX_LEAF_SIZE - 1);
 		page_record_t record;
 
 		if (radix_root->prefixes[level1] == NULL) {
@@ -457,10 +462,15 @@ static void radix_register(void* start, int num_pages, void* ptr, size_t size, s
  * allows us to assume that the nodes are already allocated. */
 static inline void radix_extract(void* object, void** ptr, size_t* size, short* object_type)
 {
-	unsigned long page = (unsigned long)object >> PAGE_BITS;
-	unsigned long level1 = page >> (RADIX_INTERIOR_BITS + RADIX_LEAF_BITS);
-	unsigned long level2 = (page >> RADIX_LEAF_BITS) & (RADIX_INTERIOR_SIZE - 1);
-	unsigned long level3 = page & (RADIX_LEAF_SIZE - 1);
+#ifdef TOP_HALF
+	const unsigned long page = ((unsigned long)object & 0x0000FFFFFFFFFFFFUL) >> PAGE_BITS;
+#else
+	const unsigned long page = (unsigned long)object >> PAGE_BITS;
+#endif
+
+	const unsigned long level1 = page >> (RADIX_INTERIOR_BITS + RADIX_LEAF_BITS);
+	const unsigned long level2 = (page >> RADIX_LEAF_BITS) & (RADIX_INTERIOR_SIZE - 1);
+	const unsigned long level3 = page & (RADIX_LEAF_SIZE - 1);
 	page_record_t record;
 	record = ((radix_leaf_t*)radix_root->prefixes[level1]->prefixes[level2])->values[level3];
 
@@ -474,6 +484,11 @@ static inline void radix_extract(void* object, void** ptr, size_t* size, short* 
 		case OBJECT_LARGE:	*size = (size_t)record.size;
 					break;
 	}
+
+#ifdef TOP_HALF
+	if ((uintptr_t)(*ptr) >> 47)
+		*((uintptr_t *)ptr) |= 0xFFFF000000000000UL;
+#endif
 }
 
 static inline int find_index(superpage_t* super, page_chunk_t* chunk, int order)
